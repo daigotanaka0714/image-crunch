@@ -1,0 +1,62 @@
+{
+  "app": {
+    "title": "Image Crunch"
+  },
+  "dropzone": {
+    "title": "Drop images or folders here",
+    "subtitle": "or click to select files",
+    "supported": "Supported: JPG, PNG, GIF, BMP, TIFF, WebP"
+  },
+  "files": {
+    "title": "Selected Files",
+    "count": "{{count}} file(s)",
+    "clear": "Clear All",
+    "remove": "Remove"
+  },
+  "settings": {
+    "title": "Settings",
+    "format": "Output Format",
+    "quality": "Quality",
+    "resize": "Resize",
+    "resizeEnable": "Enable resize",
+    "width": "Width",
+    "height": "Height",
+    "metadata": "Metadata",
+    "keepMetadata": "Keep metadata",
+    "removeMetadata": "Remove metadata",
+    "compression": "Compression",
+    "lossy": "Lossy",
+    "lossless": "Lossless",
+    "outputDir": "Output Directory",
+    "selectDir": "Select..."
+  },
+  "preview": {
+    "before": "Before",
+    "after": "After",
+    "noPreview": "No preview available"
+  },
+  "results": {
+    "title": "Results",
+    "processed": "Processed",
+    "of": "of",
+    "files": "files",
+    "overall": "Overall",
+    "average": "Average",
+    "median": "Median",
+    "reduction": "reduction"
+  },
+  "actions": {
+    "start": "Start Conversion",
+    "cancel": "Cancel",
+    "processing": "Processing..."
+  },
+  "errors": {
+    "noFiles": "Please add files to process",
+    "noOutputDir": "Please select an output directory",
+    "processingFailed": "Processing failed"
+  },
+  "language": {
+    "en": "English",
+    "ja": "日本語"
+  }
+}

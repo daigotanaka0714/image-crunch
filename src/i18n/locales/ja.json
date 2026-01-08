@@ -1,0 +1,62 @@
+{
+  "app": {
+    "title": "Image Crunch"
+  },
+  "dropzone": {
+    "title": "画像またはフォルダをここにドロップ",
+    "subtitle": "またはクリックしてファイルを選択",
+    "supported": "対応形式: JPG, PNG, GIF, BMP, TIFF, WebP"
+  },
+  "files": {
+    "title": "選択されたファイル",
+    "count": "{{count}} ファイル",
+    "clear": "すべてクリア",
+    "remove": "削除"
+  },
+  "settings": {
+    "title": "設定",
+    "format": "出力形式",
+    "quality": "品質",
+    "resize": "リサイズ",
+    "resizeEnable": "リサイズを有効にする",
+    "width": "幅",
+    "height": "高さ",
+    "metadata": "メタデータ",
+    "keepMetadata": "メタデータを保持",
+    "removeMetadata": "メタデータを削除",
+    "compression": "圧縮方式",
+    "lossy": "ロッシー",
+    "lossless": "ロスレス",
+    "outputDir": "出力先フォルダ",
+    "selectDir": "選択..."
+  },
+  "preview": {
+    "before": "変換前",
+    "after": "変換後",
+    "noPreview": "プレビューなし"
+  },
+  "results": {
+    "title": "結果",
+    "processed": "処理済み",
+    "of": "/",
+    "files": "ファイル",
+    "overall": "全体",
+    "average": "平均",
+    "median": "中央値",
+    "reduction": "削減"
+  },
+  "actions": {
+    "start": "変換開始",
+    "cancel": "キャンセル",
+    "processing": "処理中..."
+  },
+  "errors": {
+    "noFiles": "処理するファイルを追加してください",
+    "noOutputDir": "出力先フォルダを選択してください",
+    "processingFailed": "処理に失敗しました"
+  },
+  "language": {
+    "en": "English",
+    "ja": "日本語"
+  }
+}
