@@ -25,3 +25,7 @@ dist-ssr
 .playwright-mcp/*
 .claude/*
 specs/*
+
+# Generated dev icons (can be regenerated with pnpm icons:generate)
+src-tauri/icons-dev/
+src-tauri/icons-prod/
