@@ -38,15 +38,27 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install frontend dependencies
-        run: pnpm install
+        run: |
+          echo "::group::pnpm install"
+          pnpm install
+          echo "::endgroup::"
 
       - name: Check TypeScript
-        run: pnpm run build
+        run: |
+          echo "::group::Check TypeScript"
+          pnpm run build
+          echo "::endgroup::"
 
       - name: Check Rust
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+        run: |
+          echo "::group::Check Rust"
+          cargo check --manifest-path src-tauri/Cargo.toml
+          echo "::endgroup::"
 
       - name: Build Tauri app (debug)
-        run: pnpm tauri build --debug
+        run: |
+          echo "::group::Build Tauri app (debug)"
+          pnpm tauri build --debug
+          echo "::endgroup::"
         env:
           TAURI_SIGNING_PRIVATE_KEY: ''
