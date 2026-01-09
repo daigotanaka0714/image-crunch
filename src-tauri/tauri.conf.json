@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["dmg", "app", "msi", "nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,6 +37,16 @@
     ],
     "category": "Utility",
     "shortDescription": "Batch image optimization and conversion tool",
-    "longDescription": "Image Crunch is a powerful desktop application for batch image optimization and format conversion. Convert images to WebP and other formats with ease."
+    "longDescription": "Image Crunch is a powerful desktop application for batch image optimization and format conversion. Convert images to WebP and other formats with ease.",
+    "macOS": {
+      "minimumSystemVersion": "10.13"
+    },
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "nsis": {
+        "languages": ["English", "Japanese"],
+        "displayLanguageSelector": true
+      }
+    }
   }
 }
