@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { GlobeIcon } from './Icons';
 
 export function LanguageSwitcher() {
   const { i18n, t } = useTranslation();
@@ -11,9 +12,16 @@ export function LanguageSwitcher() {
   return (
     <button
       onClick={toggleLanguage}
-      className="px-3 py-1 text-sm rounded border border-gray-300 hover:bg-gray-100 transition-colors"
+      className="
+        flex items-center gap-2 px-3.5 py-2 text-sm font-medium
+        rounded-full border border-slate-200 bg-white/80 backdrop-blur-sm
+        hover:bg-slate-50 hover:border-slate-300
+        text-slate-600 hover:text-slate-800
+        transition-all duration-200 shadow-sm hover:shadow
+      "
     >
-      {i18n.language === 'en' ? t('language.ja') : t('language.en')}
+      <GlobeIcon className="w-4 h-4" />
+      <span>{i18n.language === 'en' ? t('language.ja') : t('language.en')}</span>
     </button>
   );
 }
