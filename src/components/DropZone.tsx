@@ -61,7 +61,7 @@ export function DropZone() {
           } else if (event.payload.type === 'drop') {
             setIsDragActive(false);
             processDroppedPaths(event.payload.paths);
-          } else if (event.payload.type === 'leave' || event.payload.type === 'cancel') {
+          } else if (event.payload.type === 'leave') {
             setIsDragActive(false);
           }
         });
