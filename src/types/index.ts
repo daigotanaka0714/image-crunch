@@ -56,12 +56,20 @@ export interface ImageInfo {
   format: string;
 }
 
+// File processing status
+export type FileStatus = 'pending' | 'processing' | 'completed' | 'error';
+
 // File item for UI
 export interface FileItem {
   path: string;
   name: string;
   size: number;
   preview?: string;
+  status: FileStatus;
+  outputPath?: string;
+  outputSize?: number;
+  reductionPercent?: number;
+  error?: string;
 }
 
 // App state

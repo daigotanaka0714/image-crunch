@@ -11,7 +11,8 @@
     "title": "Selected Files",
     "count": "{{count}} file(s)",
     "clear": "Clear All",
-    "remove": "Remove"
+    "remove": "Remove",
+    "reduced": "reduced"
   },
   "settings": {
     "title": "Settings",
@@ -53,7 +54,11 @@
   "errors": {
     "noFiles": "Please add files to process",
     "noOutputDir": "Please select an output directory",
-    "processingFailed": "Processing failed"
+    "processingFailed": "Processing failed",
+    "unknown": "Unknown error"
+  },
+  "notification": {
+    "body": "Converted {{count}} images ({{reduction}}% reduction)"
   },
   "language": {
     "en": "English",

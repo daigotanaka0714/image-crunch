@@ -110,7 +110,7 @@ pub async fn process_batch(
             let file_stem = input.file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| format!("image_{}", index));
-            
+
             let output_path = output_dir_path
                 .join(format!("{}.{}", file_stem, options.format.extension()));
 
@@ -122,7 +122,7 @@ pub async fn process_batch(
                 percent: ((index + 1) as f64 / total_files as f64) * 100.0,
             });
 
-            match ImageProcessor::process_image(input, &output_path, &options) {
+            let result = match ImageProcessor::process_image(input, &output_path, &options) {
                 Ok(result) => result,
                 Err(e) => ProcessingResult {
                     original_path: input_path.clone(),
@@ -133,7 +133,12 @@ pub async fn process_batch(
                     success: false,
                     error: Some(e.to_string()),
                 },
-            }
+            };
+
+            // Emit individual file result
+            let _ = app.emit("processing-result", &result);
+
+            result
         })
         .collect();
 

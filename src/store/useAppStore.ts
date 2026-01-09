@@ -5,6 +5,7 @@ import type {
   ProcessingState,
   BatchStats,
   ProgressUpdate,
+  FileStatus,
 } from '../types';
 
 interface AppState {
@@ -13,6 +14,8 @@ interface AppState {
   addFiles: (files: FileItem[]) => void;
   removeFile: (path: string) => void;
   clearFiles: () => void;
+  updateFileStatus: (path: string, status: FileStatus, result?: Partial<FileItem>) => void;
+  resetFileStatuses: () => void;
 
   // Processing options
   options: ProcessingOptions;
@@ -67,7 +70,24 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       files: state.files.filter((f) => f.path !== path),
     })),
-  clearFiles: () => set({ files: [] }),
+  clearFiles: () => set({ files: [], batchStats: null, processingState: 'idle' }),
+  updateFileStatus: (path, status, result) =>
+    set((state) => ({
+      files: state.files.map((f) =>
+        f.path === path ? { ...f, status, ...result } : f
+      ),
+    })),
+  resetFileStatuses: () =>
+    set((state) => ({
+      files: state.files.map((f) => ({
+        ...f,
+        status: 'pending' as const,
+        outputPath: undefined,
+        outputSize: undefined,
+        reductionPercent: undefined,
+        error: undefined,
+      })),
+    })),
 
   // Processing options
   options: defaultOptions,
