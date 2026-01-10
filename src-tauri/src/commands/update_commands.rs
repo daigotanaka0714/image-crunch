@@ -54,10 +54,7 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
     }
 
     if !response.status().is_success() {
-        return Err(format!(
-            "GitHub API returned status: {}",
-            response.status()
-        ));
+        return Err(format!("GitHub API returned status: {}", response.status()));
     }
 
     let release: GitHubRelease = response
@@ -88,11 +85,8 @@ pub fn get_current_version() -> String {
 
 /// Compare semantic versions to check if `latest` is newer than `current`
 fn is_newer_version(latest: &str, current: &str) -> bool {
-    let parse_version = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|s| s.parse::<u32>().ok())
-            .collect()
-    };
+    let parse_version =
+        |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse::<u32>().ok()).collect() };
 
     let latest_parts = parse_version(latest);
     let current_parts = parse_version(current);
