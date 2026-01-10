@@ -55,10 +55,8 @@ jobs:
           cargo check --manifest-path src-tauri/Cargo.toml
           echo "::endgroup::"
 
-      - name: Build Tauri app (debug)
+      - name: Build Tauri app (debug, no bundle)
         run: |
           echo "::group::Build Tauri app (debug)"
-          pnpm tauri build --debug
+          pnpm tauri build --debug --no-bundle
           echo "::endgroup::"
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ''
