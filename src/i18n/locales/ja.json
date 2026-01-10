@@ -5,7 +5,9 @@
   "dropzone": {
     "title": "画像またはフォルダをここにドロップ",
     "subtitle": "またはクリックしてファイルを選択",
-    "supported": "対応形式: JPG, PNG, GIF, BMP, TIFF, WebP"
+    "supported": "対応形式: JPG, PNG, GIF, BMP, TIFF, WebP",
+    "selectFiles": "ファイルを選択",
+    "selectFolder": "フォルダを選択"
   },
   "files": {
     "title": "選択されたファイル",

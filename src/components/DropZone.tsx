@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useAppStore } from '../store/useAppStore';
-import { UploadCloudIcon } from './Icons';
+import { UploadCloudIcon, FileIcon, FolderIcon } from './Icons';
 import type { FileItem } from '../types';
 
 const ACCEPTED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp'];
@@ -80,45 +80,71 @@ export function DropZone() {
   }, [processDroppedPaths]);
 
   // Handle click to open file picker
-  const handleClick = useCallback(async () => {
-    if (processingState === 'processing') return;
+  const handleSelectFiles = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (processingState === 'processing') return;
 
-    try {
-      const selected = await open({
-        multiple: true,
-        directory: false,
-        filters: [
-          {
-            name: 'Images',
-            extensions: ACCEPTED_EXTENSIONS,
-          },
-        ],
-      });
+      try {
+        const selected = await open({
+          multiple: true,
+          directory: false,
+          filters: [
+            {
+              name: 'Images',
+              extensions: ACCEPTED_EXTENSIONS,
+            },
+          ],
+        });
 
-      if (selected) {
-        const paths = Array.isArray(selected) ? selected : [selected];
-        await processDroppedPaths(paths);
+        if (selected) {
+          const paths = Array.isArray(selected) ? selected : [selected];
+          await processDroppedPaths(paths);
+        }
+      } catch (error) {
+        console.error('Failed to open file picker:', error);
       }
-    } catch (error) {
-      console.error('Failed to open file picker:', error);
-    }
-  }, [processingState, processDroppedPaths]);
+    },
+    [processingState, processDroppedPaths]
+  );
+
+  // Handle click to open folder picker
+  const handleSelectFolder = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (processingState === 'processing') return;
+
+      try {
+        const selected = await open({
+          multiple: false,
+          directory: true,
+        });
+
+        if (selected) {
+          const paths = Array.isArray(selected) ? selected : [selected];
+          await processDroppedPaths(paths);
+        }
+      } catch (error) {
+        console.error('Failed to open folder picker:', error);
+      }
+    },
+    [processingState, processDroppedPaths]
+  );
 
   const isProcessing = processingState === 'processing';
 
   return (
     <div
-      onClick={handleClick}
       className={`
         relative overflow-hidden
-        border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer
+        border-2 border-dashed rounded-2xl p-8 text-center
         transition-all duration-300 ease-out
         ${
           isDragActive
             ? 'border-indigo-400 bg-indigo-50/80 scale-[1.02] shadow-lg shadow-indigo-200/50'
-            : 'border-slate-200 hover:border-indigo-300 bg-white/60 hover:bg-white/80 hover:shadow-md'
+            : 'border-slate-200 bg-white/60'
         }
-        ${isProcessing ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}
+        ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
         ${isDropped ? 'animate-dropBounce' : ''}
       `}
     >
@@ -150,8 +176,41 @@ export function DropZone() {
         {/* Text content */}
         <div className="space-y-2">
           <p className="text-lg font-semibold text-slate-700">{t('dropzone.title')}</p>
-          <p className="text-sm text-slate-500">{t('dropzone.subtitle')}</p>
           <p className="text-xs text-slate-400 font-medium">{t('dropzone.supported')}</p>
+        </div>
+
+        {/* Selection buttons */}
+        <div className="flex justify-center gap-3 pt-2">
+          <button
+            onClick={handleSelectFiles}
+            disabled={isProcessing}
+            className="
+              inline-flex items-center gap-2 px-4 py-2
+              bg-white border border-slate-200 rounded-lg
+              text-sm font-medium text-slate-700
+              hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm
+              transition-all duration-200
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
+          >
+            <FileIcon className="w-4 h-4 text-indigo-500" />
+            {t('dropzone.selectFiles')}
+          </button>
+          <button
+            onClick={handleSelectFolder}
+            disabled={isProcessing}
+            className="
+              inline-flex items-center gap-2 px-4 py-2
+              bg-white border border-slate-200 rounded-lg
+              text-sm font-medium text-slate-700
+              hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm
+              transition-all duration-200
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
+          >
+            <FolderIcon className="w-4 h-4 text-violet-500" />
+            {t('dropzone.selectFolder')}
+          </button>
         </div>
       </div>
     </div>
