@@ -5,7 +5,9 @@
   "dropzone": {
     "title": "Drop images or folders here",
     "subtitle": "or click to select files",
-    "supported": "Supported: JPG, PNG, GIF, BMP, TIFF, WebP"
+    "supported": "Supported: JPG, PNG, GIF, BMP, TIFF, WebP",
+    "selectFiles": "Select Files",
+    "selectFolder": "Select Folder"
   },
   "files": {
     "title": "Selected Files",
