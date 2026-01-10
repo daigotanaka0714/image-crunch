@@ -1,6 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../store/useAppStore';
-import { TrendingDownIcon, BarChartIcon, ScaleIcon, ArrowRightIcon, SpinnerIcon, AlertCircleIcon } from './Icons';
+import {
+  TrendingDownIcon,
+  BarChartIcon,
+  ScaleIcon,
+  ArrowRightIcon,
+  SpinnerIcon,
+  AlertCircleIcon,
+} from './Icons';
 
 export function ResultsPanel() {
   const { t } = useTranslation();
@@ -27,9 +34,10 @@ export function ResultsPanel() {
         <div className="space-y-3">
           <div className="flex justify-between items-center text-sm">
             <span className="text-slate-600">
-              <span className="font-semibold text-slate-800">{progress.current}</span>
-              {' '}{t('results.of')}{' '}
-              <span className="font-semibold text-slate-800">{progress.total}</span> {t('results.files')}
+              <span className="font-semibold text-slate-800">{progress.current}</span>{' '}
+              {t('results.of')}{' '}
+              <span className="font-semibold text-slate-800">{progress.total}</span>{' '}
+              {t('results.files')}
             </span>
             <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
               {progress.percent.toFixed(0)}%
@@ -38,10 +46,7 @@ export function ResultsPanel() {
 
           {/* Animated progress bar */}
           <div className="progress-bar-track h-3">
-            <div
-              className="progress-bar-fill h-3"
-              style={{ width: `${progress.percent}%` }}
-            />
+            <div className="progress-bar-fill h-3" style={{ width: `${progress.percent}%` }} />
           </div>
 
           <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -98,7 +103,9 @@ export function ResultsPanel() {
           <div className="flex items-center justify-center gap-3 text-sm text-slate-500 bg-slate-50/50 rounded-xl py-2">
             <span className="font-medium">{formatBytes(batchStats.total_original_size)}</span>
             <ArrowRightIcon className="w-4 h-4 text-slate-400" />
-            <span className="font-semibold text-emerald-600">{formatBytes(batchStats.total_output_size)}</span>
+            <span className="font-semibold text-emerald-600">
+              {formatBytes(batchStats.total_output_size)}
+            </span>
           </div>
 
           {/* Error count */}

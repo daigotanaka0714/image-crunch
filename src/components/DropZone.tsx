@@ -87,10 +87,12 @@ export function DropZone() {
       const selected = await open({
         multiple: true,
         directory: false,
-        filters: [{
-          name: 'Images',
-          extensions: ACCEPTED_EXTENSIONS,
-        }],
+        filters: [
+          {
+            name: 'Images',
+            extensions: ACCEPTED_EXTENSIONS,
+          },
+        ],
       });
 
       if (selected) {
@@ -111,9 +113,10 @@ export function DropZone() {
         relative overflow-hidden
         border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer
         transition-all duration-300 ease-out
-        ${isDragActive
-          ? 'border-indigo-400 bg-indigo-50/80 scale-[1.02] shadow-lg shadow-indigo-200/50'
-          : 'border-slate-200 hover:border-indigo-300 bg-white/60 hover:bg-white/80 hover:shadow-md'
+        ${
+          isDragActive
+            ? 'border-indigo-400 bg-indigo-50/80 scale-[1.02] shadow-lg shadow-indigo-200/50'
+            : 'border-slate-200 hover:border-indigo-300 bg-white/60 hover:bg-white/80 hover:shadow-md'
         }
         ${isProcessing ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}
         ${isDropped ? 'animate-dropBounce' : ''}
@@ -124,27 +127,29 @@ export function DropZone() {
 
       <div className="relative space-y-4">
         {/* Icon container */}
-        <div className={`
+        <div
+          className={`
           mx-auto rounded-2xl
           bg-gradient-to-br from-indigo-100 to-violet-100
           flex items-center justify-center
           transition-all duration-300
           ${isDragActive ? 'scale-110 shadow-lg shadow-indigo-200/50' : ''}
-        `} style={{ width: '80px', height: '80px' }}>
+        `}
+          style={{ width: '80px', height: '80px' }}
+        >
           <UploadCloudIcon
             style={{ width: '40px', height: '40px' }}
             className={`
               text-indigo-500
               transition-transform duration-300
               ${isDragActive ? '-translate-y-1' : ''}
-            `} />
+            `}
+          />
         </div>
 
         {/* Text content */}
         <div className="space-y-2">
-          <p className="text-lg font-semibold text-slate-700">
-            {t('dropzone.title')}
-          </p>
+          <p className="text-lg font-semibold text-slate-700">{t('dropzone.title')}</p>
           <p className="text-sm text-slate-500">{t('dropzone.subtitle')}</p>
           <p className="text-xs text-slate-400 font-medium">{t('dropzone.supported')}</p>
         </div>

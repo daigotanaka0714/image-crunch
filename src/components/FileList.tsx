@@ -1,6 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '../store/useAppStore';
-import { ImageIcon, XIcon, TrashIcon, CheckCircleIcon, AlertCircleIcon, SpinnerIcon } from './Icons';
+import {
+  ImageIcon,
+  XIcon,
+  TrashIcon,
+  CheckCircleIcon,
+  AlertCircleIcon,
+  SpinnerIcon,
+} from './Icons';
 import type { FileStatus } from '../types';
 
 function StatusIcon({ status }: { status: FileStatus }) {
@@ -25,8 +32,8 @@ export function FileList() {
   }
 
   const isProcessing = processingState === 'processing';
-  const completedCount = files.filter(f => f.status === 'completed').length;
-  const errorCount = files.filter(f => f.status === 'error').length;
+  const completedCount = files.filter((f) => f.status === 'completed').length;
+  const errorCount = files.filter((f) => f.status === 'error').length;
 
   return (
     <div className="card p-4 animate-slideUp">
@@ -79,12 +86,14 @@ export function FileList() {
             style={{ animationDelay: `${index * 30}ms` }}
           >
             {/* Status/File icon */}
-            <div className={`
+            <div
+              className={`
               w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
               ${file.status === 'completed' ? 'bg-gradient-to-br from-emerald-100 to-teal-100' : ''}
               ${file.status === 'error' ? 'bg-gradient-to-br from-rose-100 to-pink-100' : ''}
               ${file.status === 'pending' || file.status === 'processing' ? 'bg-gradient-to-br from-indigo-100 to-violet-100' : ''}
-            `}>
+            `}
+            >
               {file.status === 'pending' ? (
                 <ImageIcon className="w-4 h-4 text-indigo-500" />
               ) : (
@@ -94,17 +103,21 @@ export function FileList() {
 
             {/* File info */}
             <div className="flex-1 min-w-0">
-              <span className={`
+              <span
+                className={`
                 truncate block font-medium
                 ${file.status === 'completed' ? 'text-emerald-700' : ''}
                 ${file.status === 'error' ? 'text-rose-700' : ''}
                 ${file.status === 'pending' || file.status === 'processing' ? 'text-slate-700' : ''}
-              `} title={file.path}>
+              `}
+                title={file.path}
+              >
                 {file.name}
               </span>
               {file.status === 'completed' && file.reductionPercent !== undefined && (
                 <span className="text-xs text-emerald-600">
-                  → {file.outputPath?.split('/').pop()} ({file.reductionPercent.toFixed(1)}% {t('files.reduced')})
+                  → {file.outputPath?.split('/').pop()} ({file.reductionPercent.toFixed(1)}%{' '}
+                  {t('files.reduced')})
                 </span>
               )}
               {file.status === 'error' && file.error && (

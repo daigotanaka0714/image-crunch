@@ -133,9 +133,10 @@ export function ActionButtons() {
           flex-1 py-3.5 px-6 rounded-xl font-semibold text-white
           flex items-center justify-center gap-2.5
           transition-all duration-200 ease-out
-          ${canStart
-            ? 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]'
-            : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+          ${
+            canStart
+              ? 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]'
+              : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
           }
         `}
       >

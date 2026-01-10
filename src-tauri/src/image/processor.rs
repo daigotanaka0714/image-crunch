@@ -158,10 +158,8 @@ impl ImageProcessor {
             OutputFormat::Jpeg => {
                 let mut file = std::fs::File::create(output_path)
                     .map_err(|e| ProcessError::WriteError(e.to_string()))?;
-                let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                    &mut file,
-                    options.quality,
-                );
+                let encoder =
+                    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut file, options.quality);
                 img.to_rgb8()
                     .write_with_encoder(encoder)
                     .map_err(|e| ProcessError::WriteError(e.to_string()))?;
@@ -186,15 +184,13 @@ impl ImageProcessor {
                 // Use webp crate for better quality control
                 let rgba = img.to_rgba8();
                 let (width, height) = rgba.dimensions();
-                
+
                 let encoded = if options.compression == CompressionType::Lossless {
-                    webp::Encoder::from_rgba(&rgba, width, height)
-                        .encode_lossless()
+                    webp::Encoder::from_rgba(&rgba, width, height).encode_lossless()
                 } else {
-                    webp::Encoder::from_rgba(&rgba, width, height)
-                        .encode(options.quality as f32)
+                    webp::Encoder::from_rgba(&rgba, width, height).encode(options.quality as f32)
                 };
-                
+
                 std::fs::write(output_path, &*encoded)
                     .map_err(|e| ProcessError::WriteError(e.to_string()))?;
             }

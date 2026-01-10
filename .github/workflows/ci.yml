@@ -31,6 +31,8 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -42,6 +44,12 @@ jobs:
           echo "::group::pnpm install"
           pnpm install
           echo "::endgroup::"
+
+      - name: Check Prettier formatting
+        run: pnpm format:check
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
       - name: Check TypeScript
         run: |

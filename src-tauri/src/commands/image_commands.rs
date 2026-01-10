@@ -37,7 +37,7 @@ pub fn get_image_files(paths: Vec<String>) -> Result<Vec<String>, String> {
 
     for path_str in paths {
         let path = Path::new(&path_str);
-        
+
         if path.is_file() {
             if let Some(ext) = path.extension() {
                 if InputFormat::is_supported(&ext.to_string_lossy()) {
@@ -75,15 +75,18 @@ pub fn process_single_image(
 ) -> Result<ProcessingResult, String> {
     let input = Path::new(&input_path);
     let output_dir = Path::new(&output_dir);
-    
-    // Create output path
-    let file_stem = input.file_stem()
-        .ok_or_else(|| "Invalid input file".to_string())?;
-    let output_path = output_dir
-        .join(format!("{}.{}", file_stem.to_string_lossy(), options.format.extension()));
 
-    ImageProcessor::process_image(input, &output_path, &options)
-        .map_err(|e| e.to_string())
+    // Create output path
+    let file_stem = input
+        .file_stem()
+        .ok_or_else(|| "Invalid input file".to_string())?;
+    let output_path = output_dir.join(format!(
+        "{}.{}",
+        file_stem.to_string_lossy(),
+        options.format.extension()
+    ));
+
+    ImageProcessor::process_image(input, &output_path, &options).map_err(|e| e.to_string())
 }
 
 /// Process multiple images in batch
@@ -107,20 +110,24 @@ pub async fn process_batch(
         .enumerate()
         .map(|(index, input_path)| {
             let input = Path::new(input_path);
-            let file_stem = input.file_stem()
+            let file_stem = input
+                .file_stem()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| format!("image_{}", index));
 
-            let output_path = output_dir_path
-                .join(format!("{}.{}", file_stem, options.format.extension()));
+            let output_path =
+                output_dir_path.join(format!("{}.{}", file_stem, options.format.extension()));
 
             // Emit progress update
-            let _ = app.emit("processing-progress", ProgressUpdate {
-                current: index + 1,
-                total: total_files,
-                current_file: input_path.clone(),
-                percent: ((index + 1) as f64 / total_files as f64) * 100.0,
-            });
+            let _ = app.emit(
+                "processing-progress",
+                ProgressUpdate {
+                    current: index + 1,
+                    total: total_files,
+                    current_file: input_path.clone(),
+                    percent: ((index + 1) as f64 / total_files as f64) * 100.0,
+                },
+            );
 
             let result = match ImageProcessor::process_image(input, &output_path, &options) {
                 Ok(result) => result,
@@ -154,26 +161,18 @@ pub async fn process_batch(
 /// Calculate batch processing statistics
 fn calculate_batch_stats(results: &[ProcessingResult]) -> BatchStats {
     let total_files = results.len();
-    let successful_results: Vec<&ProcessingResult> = results
-        .iter()
-        .filter(|r| r.success)
-        .collect();
+    let successful_results: Vec<&ProcessingResult> = results.iter().filter(|r| r.success).collect();
 
     let successful_files = successful_results.len();
     let failed_files = total_files - successful_files;
 
-    let total_original_size: u64 = successful_results
-        .iter()
-        .map(|r| r.original_size)
-        .sum();
+    let total_original_size: u64 = successful_results.iter().map(|r| r.original_size).sum();
 
-    let total_output_size: u64 = successful_results
-        .iter()
-        .map(|r| r.output_size)
-        .sum();
+    let total_output_size: u64 = successful_results.iter().map(|r| r.output_size).sum();
 
     let overall_reduction_percent = if total_original_size > 0 {
-        ((total_original_size as f64 - total_output_size as f64) / total_original_size as f64) * 100.0
+        ((total_original_size as f64 - total_output_size as f64) / total_original_size as f64)
+            * 100.0
     } else {
         0.0
     };
@@ -218,19 +217,18 @@ fn calculate_batch_stats(results: &[ProcessingResult]) -> BatchStats {
 #[tauri::command]
 pub fn get_image_info(path: String) -> Result<ImageInfo, String> {
     let path = Path::new(&path);
-    
-    let metadata = std::fs::metadata(path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
-    
-    let img = image::open(path)
-        .map_err(|e| format!("Failed to open image: {}", e))?;
-    
+
+    let metadata = std::fs::metadata(path).map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let img = image::open(path).map_err(|e| format!("Failed to open image: {}", e))?;
+
     Ok(ImageInfo {
         path: path.to_string_lossy().to_string(),
         width: img.width(),
         height: img.height(),
         size_bytes: metadata.len(),
-        format: path.extension()
+        format: path
+            .extension()
             .map(|e| e.to_string_lossy().to_string())
             .unwrap_or_default(),
     })
