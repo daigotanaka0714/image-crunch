@@ -6,6 +6,7 @@ import {
   ResultsPanel,
   ActionButtons,
   LanguageSwitcher,
+  UpdateNotification,
 } from './components';
 import { useAppStore } from './store/useAppStore';
 import { AlertCircleIcon, XIcon } from './components/Icons';
@@ -32,6 +33,9 @@ function App() {
           </div>
           <LanguageSwitcher />
         </div>
+
+        {/* Update Notification */}
+        <UpdateNotification />
 
         {/* Error Message */}
         {error && (
