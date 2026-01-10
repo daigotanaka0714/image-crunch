@@ -46,10 +46,16 @@ jobs:
           echo "::endgroup::"
 
       - name: Check Prettier formatting
-        run: pnpm format:check
+        run: |
+          echo "::group::prettier check"
+          pnpm format:check
+          echo "::endgroup::"
 
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        run: |
+          echo "::group:: cargo fmt"
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          echo "::endgroup::"
 
       - name: Check TypeScript
         run: |
