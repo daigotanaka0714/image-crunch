@@ -65,5 +65,11 @@
   "language": {
     "en": "English",
     "ja": "日本語"
+  },
+  "update": {
+    "available": "New version available!",
+    "description": "Download the latest version for new features and improvements.",
+    "download": "Download",
+    "dismiss": "Dismiss"
   }
 }

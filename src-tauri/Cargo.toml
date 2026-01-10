@@ -39,3 +39,6 @@ walkdir = "2"
 thiserror = "2"
 anyhow = "1"
 
+# HTTP client for update checking
+reqwest = { version = "0.12", features = ["json"] }
+
