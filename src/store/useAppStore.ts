@@ -61,9 +61,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       files: [
         ...state.files,
-        ...newFiles.filter(
-          (newFile) => !state.files.some((f) => f.path === newFile.path)
-        ),
+        ...newFiles.filter((newFile) => !state.files.some((f) => f.path === newFile.path)),
       ],
     })),
   removeFile: (path) =>
@@ -73,9 +71,7 @@ export const useAppStore = create<AppState>((set) => ({
   clearFiles: () => set({ files: [], batchStats: null, processingState: 'idle' }),
   updateFileStatus: (path, status, result) =>
     set((state) => ({
-      files: state.files.map((f) =>
-        f.path === path ? { ...f, status, ...result } : f
-      ),
+      files: state.files.map((f) => (f.path === path ? { ...f, status, ...result } : f)),
     })),
   resetFileStatuses: () =>
     set((state) => ({

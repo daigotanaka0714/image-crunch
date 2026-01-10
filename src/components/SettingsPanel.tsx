@@ -112,7 +112,9 @@ export function SettingsPanel() {
           {resizeEnabled && (
             <div className="flex gap-3 animate-fadeIn">
               <div className="flex-1">
-                <label className="text-xs font-medium text-slate-500 mb-1 block">{t('settings.width')}</label>
+                <label className="text-xs font-medium text-slate-500 mb-1 block">
+                  {t('settings.width')}
+                </label>
                 <input
                   type="number"
                   placeholder="px"
@@ -125,7 +127,9 @@ export function SettingsPanel() {
                 />
               </div>
               <div className="flex-1">
-                <label className="text-xs font-medium text-slate-500 mb-1 block">{t('settings.height')}</label>
+                <label className="text-xs font-medium text-slate-500 mb-1 block">
+                  {t('settings.height')}
+                </label>
                 <input
                   type="number"
                   placeholder="px"

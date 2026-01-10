@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "icons:dev": "./scripts/use-dev-icons.sh",
     "icons:prod": "./scripts/use-prod-icons.sh",
     "icons:generate": "./scripts/generate-dev-icons.sh"
@@ -35,6 +37,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "prettier": "^3.7.4",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }
