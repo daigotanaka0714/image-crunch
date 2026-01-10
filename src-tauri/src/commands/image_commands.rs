@@ -1,6 +1,9 @@
 use rayon::prelude::*;
+use rayon::ThreadPoolBuilder;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use walkdir::WalkDir;
 
@@ -89,6 +92,18 @@ pub fn process_single_image(
     ImageProcessor::process_image(input, &output_path, &options).map_err(|e| e.to_string())
 }
 
+/// Calculate optimal thread count for image processing
+/// Limits parallelism to avoid I/O bottlenecks and excessive memory usage
+fn calculate_optimal_threads() -> usize {
+    let cpu_count = std::thread::available_parallelism()
+        .map(|p| p.get())
+        .unwrap_or(4);
+
+    // Use half of available CPUs, with a minimum of 2 and maximum of 8
+    // This prevents I/O saturation and reduces memory pressure for large images
+    cpu_count.div_ceil(2).clamp(2, 8)
+}
+
 /// Process multiple images in batch
 #[tauri::command]
 pub async fn process_batch(
@@ -104,50 +119,68 @@ pub async fn process_batch(
     std::fs::create_dir_all(&output_dir_path)
         .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
-    // Process images in parallel
-    let results: Vec<ProcessingResult> = input_paths
-        .par_iter()
-        .enumerate()
-        .map(|(index, input_path)| {
-            let input = Path::new(input_path);
-            let file_stem = input
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| format!("image_{}", index));
+    // Calculate optimal thread count to balance CPU and I/O
+    let num_threads = calculate_optimal_threads();
 
-            let output_path =
-                output_dir_path.join(format!("{}.{}", file_stem, options.format.extension()));
+    // Create a custom thread pool with limited parallelism
+    let pool = ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+        .map_err(|e| format!("Failed to create thread pool: {}", e))?;
 
-            // Emit progress update
-            let _ = app.emit(
-                "processing-progress",
-                ProgressUpdate {
-                    current: index + 1,
-                    total: total_files,
-                    current_file: input_path.clone(),
-                    percent: ((index + 1) as f64 / total_files as f64) * 100.0,
-                },
-            );
+    // Use atomic counter for accurate progress tracking across threads
+    let processed_count = Arc::new(AtomicUsize::new(0));
 
-            let result = match ImageProcessor::process_image(input, &output_path, &options) {
-                Ok(result) => result,
-                Err(e) => ProcessingResult {
-                    original_path: input_path.clone(),
-                    output_path: output_path.to_string_lossy().to_string(),
-                    original_size: 0,
-                    output_size: 0,
-                    reduction_percent: 0.0,
-                    success: false,
-                    error: Some(e.to_string()),
-                },
-            };
+    // Process images in parallel with controlled concurrency
+    let results: Vec<ProcessingResult> = pool.install(|| {
+        input_paths
+            .par_iter()
+            .enumerate()
+            .map(|(index, input_path)| {
+                let input = Path::new(input_path);
+                let file_stem = input
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| format!("image_{}", index));
 
-            // Emit individual file result
-            let _ = app.emit("processing-result", &result);
+                let output_path =
+                    output_dir_path.join(format!("{}.{}", file_stem, options.format.extension()));
 
-            result
-        })
-        .collect();
+                // Process the image
+                let result = match ImageProcessor::process_image(input, &output_path, &options) {
+                    Ok(result) => result,
+                    Err(e) => ProcessingResult {
+                        original_path: input_path.clone(),
+                        output_path: output_path.to_string_lossy().to_string(),
+                        original_size: 0,
+                        output_size: 0,
+                        reduction_percent: 0.0,
+                        success: false,
+                        error: Some(e.to_string()),
+                    },
+                };
+
+                // Update progress counter atomically
+                let current = processed_count.fetch_add(1, Ordering::SeqCst) + 1;
+
+                // Emit progress update
+                let _ = app.emit(
+                    "processing-progress",
+                    ProgressUpdate {
+                        current,
+                        total: total_files,
+                        current_file: input_path.clone(),
+                        percent: (current as f64 / total_files as f64) * 100.0,
+                    },
+                );
+
+                // Emit individual file result
+                let _ = app.emit("processing-result", &result);
+
+                result
+            })
+            .collect()
+    });
 
     // Calculate statistics
     let stats = calculate_batch_stats(&results);
