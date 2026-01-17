@@ -1,6 +1,6 @@
 [package]
 name = "image-crunch"
-version = "0.2.0"
+version = "0.2.1"
 description = "Batch image optimization and conversion tool"
 authors = ["daigotanaka0714"]
 edition = "2021"

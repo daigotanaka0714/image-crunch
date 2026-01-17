@@ -48,6 +48,19 @@ No build required! Download the installer for your platform from the [Releases](
 | Windows | `Image.Crunch_*_x64-setup.exe` | Installer |
 | Windows | `Image.Crunch_*_x64.msi` | MSI package |
 
+#### macOS Notes
+
+The app is not code-signed, so macOS Gatekeeper may block it from launching. Follow these steps to open the app:
+
+1. Open the DMG file and drag the app to the Applications folder
+2. Right-click (or Control-click) the app and select "Open"
+3. Click "Open" in the security dialog
+
+Alternatively, remove the quarantine attribute via Terminal:
+```bash
+xattr -cr /Applications/Image\ Crunch.app
+```
+
 ### For Developers
 
 If you want to modify or contribute to the project, see the [Development](#development) section below.
