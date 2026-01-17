@@ -58,6 +58,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Ad-hoc signing for macOS (allows unsigned apps to run without "damaged" error)
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Image Crunch ${{ github.ref_name }}'
