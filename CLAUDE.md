@@ -78,22 +78,7 @@ Image Crunch is a Tauri v2 desktop app for batch image optimization and format c
 - `/bugfix` - 体系的なバグ調査・修正ワークフロー
 - `/investigate` - コードベースの網羅的調査
 
-## エージェントの完了条件
-
-作業が「終わった」と言えるのは、次の3つをすべて満たしたときだけ。
-
-1. `./bin/agent-check` が `STATUS: PASS` を返している
-2. 変更が依頼された範囲に収まっている
-3. main ではないブランチから PR を作成している
-
-### 禁止事項
-
-- **main への直接 push は禁止。** 必ずブランチを切って PR を作る。
-- **マージは行わない。** `git merge` / `gh pr merge` / `wt merge` はすべて禁止。
-  PR のレビューとマージは人間が行う。
-- **`bin/agent-check` を「通すために」書き換えない。** ゲートを緩める変更は、
-  それ自体を独立した PR として提案し、理由を説明すること。
-- ルールを off にして lint を通さない。指摘は直す。
+## このリポジトリ固有のこと
 
 ### ゲートの中身
 
@@ -128,10 +113,31 @@ CI（`.github/workflows/ci.yml`）は同じ検査を行う。
 **片方だけを変更しないこと。** ローカルと CI がずれると、
 エージェントは「CI は通るのに手元が赤い」状態で迷走する。
 
-### 並列作業
+<!-- daigo-lab-ops:completion-criteria:start -->
+<!-- 自動生成。daigo-lab-ops/docs/completion-criteria.md が唯一の出どころ。
+     ここを手で編集しない。`lab sync` で作り直す。 -->
 
-worktree を使って複数のエージェントを同時に走らせる場合:
+## エージェントの完了条件
 
-- 同じファイルを触るタスクを同時に出さない
-- 各エージェントは自分の worktree で `bin/agent-check` を通してから PR を作る
-- `wt step copy-ignored` は使わない（`.config/wt.toml` のコメント参照）
+### 「終わった」と言える条件
+
+1. そのリポジトリの `bin/agent-check` が `STATUS: PASS` を返している
+2. 変更が依頼された範囲に収まっている
+3. main / master ではないブランチから PR を作成している
+
+### 禁止事項
+
+- **既定ブランチへの直接 push は禁止。** 必ずブランチを切って PR を作る。
+- **マージは行わない。** `git merge` / `gh pr merge` はすべて人間の仕事。
+- **ゲートを「通すために」書き換えない。** ゲートを緩める変更は、それ自体を
+  独立した PR として提案し、理由を説明すること。
+- **ルールを off にして lint を通さない。** 指摘は直す。
+
+### PR を作るときの注意
+
+- PR 本文にもコミットメッセージにも Claude のセッション URL
+  （`claude.ai/code/session_...`）や `Claude-Session:` 行を入れない
+- 積み上げ（stacked）PR に `--delete-branch` を使わない
+  （土台のブランチを消すと GitHub が上の PR を自動クローズする）
+
+<!-- daigo-lab-ops:completion-criteria:end -->
