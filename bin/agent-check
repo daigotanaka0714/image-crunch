@@ -82,6 +82,9 @@ run_stage lint "biome check" \
 run_stage typecheck "tsc --noEmit" \
   env NODE_ENV="$NODE_ENV_TEST" $PNPM exec tsc --noEmit || OK=0
 
+run_stage test "vitest run" \
+  env NODE_ENV="$NODE_ENV_TEST" $PNPM exec vitest run || OK=0
+
 run_stage build "vite build" \
   env NODE_ENV="$NODE_ENV_BUILD" $PNPM exec vite build || OK=0
 
