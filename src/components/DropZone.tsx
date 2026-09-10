@@ -1,13 +1,22 @@
-import { useCallback, useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open } from '@tauri-apps/plugin-dialog';
-import { useAppStore } from '../store/useAppStore';
-import { UploadCloudIcon, FileIcon, FolderIcon } from './Icons';
-import type { FileItem } from '../types';
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { open } from "@tauri-apps/plugin-dialog";
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useAppStore } from "../store/useAppStore";
+import type { FileItem } from "../types";
+import { FileIcon, FolderIcon, UploadCloudIcon } from "./Icons";
 
-const ACCEPTED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp'];
+const ACCEPTED_EXTENSIONS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "bmp",
+  "tiff",
+  "tif",
+  "webp",
+];
 
 export function DropZone() {
   const { t } = useTranslation();
@@ -17,17 +26,17 @@ export function DropZone() {
 
   const processDroppedPaths = useCallback(
     async (paths: string[]) => {
-      if (processingState === 'processing') return;
+      if (processingState === "processing") return;
 
       try {
         // Get all image files (including from directories)
-        const imagePaths = await invoke<string[]>('get_image_files', { paths });
+        const imagePaths = await invoke<string[]>("get_image_files", { paths });
 
         const fileItems: FileItem[] = imagePaths.map((path) => ({
           path,
-          name: path.split('/').pop() || path.split('\\').pop() || path,
+          name: path.split("/").pop() || path.split("\\").pop() || path,
           size: 0, // Will be populated when processing
-          status: 'pending' as const,
+          status: "pending" as const,
         }));
 
         addFiles(fileItems);
@@ -36,10 +45,10 @@ export function DropZone() {
         setIsDropped(true);
         setTimeout(() => setIsDropped(false), 300);
       } catch (error) {
-        console.error('Failed to process dropped files:', error);
+        console.error("Failed to process dropped files:", error);
       }
     },
-    [addFiles, processingState]
+    [addFiles, processingState],
   );
 
   // Set up Tauri drag and drop event listener
@@ -48,25 +57,27 @@ export function DropZone() {
 
     const setupDragDrop = async () => {
       // Check if running in Tauri environment
-      if (typeof window === 'undefined' || !('__TAURI__' in window)) {
-        console.warn('Not running in Tauri environment, drag and drop disabled');
+      if (typeof window === "undefined" || !("__TAURI__" in window)) {
+        console.warn(
+          "Not running in Tauri environment, drag and drop disabled",
+        );
         return;
       }
 
       try {
         const currentWindow = getCurrentWindow();
         unlisten = await currentWindow.onDragDropEvent((event) => {
-          if (event.payload.type === 'over') {
+          if (event.payload.type === "over") {
             setIsDragActive(true);
-          } else if (event.payload.type === 'drop') {
+          } else if (event.payload.type === "drop") {
             setIsDragActive(false);
             processDroppedPaths(event.payload.paths);
-          } else if (event.payload.type === 'leave') {
+          } else if (event.payload.type === "leave") {
             setIsDragActive(false);
           }
         });
       } catch (error) {
-        console.error('Failed to set up drag and drop:', error);
+        console.error("Failed to set up drag and drop:", error);
       }
     };
 
@@ -83,7 +94,7 @@ export function DropZone() {
   const handleSelectFiles = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (processingState === 'processing') return;
+      if (processingState === "processing") return;
 
       try {
         const selected = await open({
@@ -91,7 +102,7 @@ export function DropZone() {
           directory: false,
           filters: [
             {
-              name: 'Images',
+              name: "Images",
               extensions: ACCEPTED_EXTENSIONS,
             },
           ],
@@ -102,17 +113,17 @@ export function DropZone() {
           await processDroppedPaths(paths);
         }
       } catch (error) {
-        console.error('Failed to open file picker:', error);
+        console.error("Failed to open file picker:", error);
       }
     },
-    [processingState, processDroppedPaths]
+    [processingState, processDroppedPaths],
   );
 
   // Handle click to open folder picker
   const handleSelectFolder = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (processingState === 'processing') return;
+      if (processingState === "processing") return;
 
       try {
         const selected = await open({
@@ -125,13 +136,13 @@ export function DropZone() {
           await processDroppedPaths(paths);
         }
       } catch (error) {
-        console.error('Failed to open folder picker:', error);
+        console.error("Failed to open folder picker:", error);
       }
     },
-    [processingState, processDroppedPaths]
+    [processingState, processDroppedPaths],
   );
 
-  const isProcessing = processingState === 'processing';
+  const isProcessing = processingState === "processing";
 
   return (
     <div
@@ -141,11 +152,11 @@ export function DropZone() {
         transition-all duration-300 ease-out
         ${
           isDragActive
-            ? 'border-indigo-400 bg-indigo-50/80 scale-[1.02] shadow-lg shadow-indigo-200/50'
-            : 'border-slate-200 bg-white/60'
+            ? "border-indigo-400 bg-indigo-50/80 scale-[1.02] shadow-lg shadow-indigo-200/50"
+            : "border-slate-200 bg-white/60"
         }
-        ${isProcessing ? 'opacity-50 pointer-events-none' : ''}
-        ${isDropped ? 'animate-dropBounce' : ''}
+        ${isProcessing ? "opacity-50 pointer-events-none" : ""}
+        ${isDropped ? "animate-dropBounce" : ""}
       `}
     >
       {/* Background gradient overlay */}
@@ -159,29 +170,34 @@ export function DropZone() {
           bg-gradient-to-br from-indigo-100 to-violet-100
           flex items-center justify-center
           transition-all duration-300
-          ${isDragActive ? 'scale-110 shadow-lg shadow-indigo-200/50' : ''}
+          ${isDragActive ? "scale-110 shadow-lg shadow-indigo-200/50" : ""}
         `}
-          style={{ width: '80px', height: '80px' }}
+          style={{ width: "80px", height: "80px" }}
         >
           <UploadCloudIcon
-            style={{ width: '40px', height: '40px' }}
+            style={{ width: "40px", height: "40px" }}
             className={`
               text-indigo-500
               transition-transform duration-300
-              ${isDragActive ? '-translate-y-1' : ''}
+              ${isDragActive ? "-translate-y-1" : ""}
             `}
           />
         </div>
 
         {/* Text content */}
         <div className="space-y-2">
-          <p className="text-lg font-semibold text-slate-700">{t('dropzone.title')}</p>
-          <p className="text-xs text-slate-400 font-medium">{t('dropzone.supported')}</p>
+          <p className="text-lg font-semibold text-slate-700">
+            {t("dropzone.title")}
+          </p>
+          <p className="text-xs text-slate-400 font-medium">
+            {t("dropzone.supported")}
+          </p>
         </div>
 
         {/* Selection buttons */}
         <div className="flex justify-center gap-3 pt-2">
           <button
+            type="button"
             onClick={handleSelectFiles}
             disabled={isProcessing}
             className="
@@ -194,9 +210,10 @@ export function DropZone() {
             "
           >
             <FileIcon className="w-4 h-4 text-indigo-500" />
-            {t('dropzone.selectFiles')}
+            {t("dropzone.selectFiles")}
           </button>
           <button
+            type="button"
             onClick={handleSelectFolder}
             disabled={isProcessing}
             className="
@@ -209,7 +226,7 @@ export function DropZone() {
             "
           >
             <FolderIcon className="w-4 h-4 text-violet-500" />
-            {t('dropzone.selectFolder')}
+            {t("dropzone.selectFolder")}
           </button>
         </div>
       </div>

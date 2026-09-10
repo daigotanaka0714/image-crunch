@@ -1,17 +1,17 @@
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from "react-i18next";
 import {
+  ActionButtons,
   DropZone,
   FileList,
-  SettingsPanel,
-  ResultsPanel,
-  ActionButtons,
   LanguageSwitcher,
+  ResultsPanel,
+  SettingsPanel,
   UpdateNotification,
-} from './components';
-import { useAppStore } from './store/useAppStore';
-import { AlertCircleIcon, XIcon } from './components/Icons';
-import './i18n';
-import './App.css';
+} from "./components";
+import { AlertCircleIcon, XIcon } from "./components/Icons";
+import { useAppStore } from "./store/useAppStore";
+import "./i18n";
+import "./App.css";
 
 function App() {
   const { t } = useTranslation();
@@ -25,11 +25,13 @@ function App() {
           <div className="flex items-center gap-3">
             <img
               src="/favicon.png"
-              alt="Image Crunch"
+              alt=""
               className="rounded-xl shadow-lg shadow-indigo-500/25"
-              style={{ width: '40px', height: '40px' }}
+              style={{ width: "40px", height: "40px" }}
             />
-            <h1 className="text-2xl font-bold gradient-text">{t('app.title')}</h1>
+            <h1 className="text-2xl font-bold gradient-text">
+              {t("app.title")}
+            </h1>
           </div>
           <LanguageSwitcher />
         </div>
@@ -43,6 +45,7 @@ function App() {
             <AlertCircleIcon className="w-5 h-5 text-rose-500 flex-shrink-0" />
             <span className="flex-1 text-sm">{error}</span>
             <button
+              type="button"
               onClick={() => setError(null)}
               className="p-1.5 hover:bg-rose-100 rounded-lg transition-colors"
             >

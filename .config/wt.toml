@@ -1,0 +1,16 @@
+# worktrunk（wt）のプロジェクト設定
+#
+# 【重要】このファイルは「今いる worktree」のものが読まれる。
+#   main にこの設定が無いと、main から切った worktree では hooks が発火しない。
+#
+# 【重要】`wt step copy-ignored` は使わないこと。
+#   glimpse で実行したところ、Rust の target を含む 40,827 ファイル / 17.0 GiB を
+#   複製した。gitignore 対象は「複製する」のではなく「再生成する」方針にする。
+#   image-crunch では node_modules (119MB) と src-tauri/target (920MB) が該当する。
+
+[hooks]
+# worktree を作った直後に依存を入れ直す（pnpm のストア共有により数秒で終わる）
+pre-start = "pnpm install --frozen-lockfile"
+
+# マージ前に完了条件を満たしているか確認する
+pre-merge = "bin/agent-check"

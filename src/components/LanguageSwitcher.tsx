@@ -1,16 +1,17 @@
-import { useTranslation } from 'react-i18next';
-import { GlobeIcon } from './Icons';
+import { useTranslation } from "react-i18next";
+import { GlobeIcon } from "./Icons";
 
 export function LanguageSwitcher() {
   const { i18n, t } = useTranslation();
 
   const toggleLanguage = () => {
-    const newLang = i18n.language === 'en' ? 'ja' : 'en';
+    const newLang = i18n.language === "en" ? "ja" : "en";
     i18n.changeLanguage(newLang);
   };
 
   return (
     <button
+      type="button"
       onClick={toggleLanguage}
       className="
         flex items-center gap-2 px-3.5 py-2 text-sm font-medium
@@ -21,7 +22,9 @@ export function LanguageSwitcher() {
       "
     >
       <GlobeIcon className="w-4 h-4" />
-      <span>{i18n.language === 'en' ? t('language.ja') : t('language.en')}</span>
+      <span>
+        {i18n.language === "en" ? t("language.ja") : t("language.en")}
+      </span>
     </button>
   );
 }

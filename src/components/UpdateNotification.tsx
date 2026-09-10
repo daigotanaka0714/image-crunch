@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api/core';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { XIcon, DownloadIcon } from './Icons';
+import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { DownloadIcon, XIcon } from "./Icons";
 
 interface UpdateInfo {
   update_available: boolean;
@@ -21,10 +21,10 @@ export function UpdateNotification() {
   useEffect(() => {
     const checkUpdate = async () => {
       try {
-        const info = await invoke<UpdateInfo>('check_for_updates');
+        const info = await invoke<UpdateInfo>("check_for_updates");
         setUpdateInfo(info);
       } catch (error) {
-        console.error('Failed to check for updates:', error);
+        console.error("Failed to check for updates:", error);
       } finally {
         setChecking(false);
       }
@@ -55,24 +55,28 @@ export function UpdateNotification() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-sm">{t('update.available')}</span>
+            <span className="font-medium text-sm">{t("update.available")}</span>
             <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
               v{updateInfo.current_version} → v{updateInfo.latest_version}
             </span>
           </div>
-          <p className="text-xs text-indigo-600 mt-1">{t('update.description')}</p>
+          <p className="text-xs text-indigo-600 mt-1">
+            {t("update.description")}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
+            type="button"
             onClick={handleDownload}
             className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition-colors"
           >
-            {t('update.download')}
+            {t("update.download")}
           </button>
           <button
+            type="button"
             onClick={handleDismiss}
             className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors"
-            aria-label={t('update.dismiss')}
+            aria-label={t("update.dismiss")}
           >
             <XIcon className="w-4 h-4 text-indigo-500" />
           </button>

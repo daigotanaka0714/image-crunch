@@ -1,9 +1,9 @@
 // Image formats
-export type InputFormat = 'jpeg' | 'png' | 'gif' | 'bmp' | 'tiff' | 'webp';
-export type OutputFormat = 'jpeg' | 'png' | 'gif' | 'bmp' | 'tiff' | 'webp';
+export type InputFormat = "jpeg" | "png" | "gif" | "bmp" | "tiff" | "webp";
+export type OutputFormat = "jpeg" | "png" | "gif" | "bmp" | "tiff" | "webp";
 
 // Compression type
-export type CompressionType = 'lossy' | 'lossless';
+export type CompressionType = "lossy" | "lossless";
 
 // Processing options
 export interface ProcessingOptions {
@@ -57,7 +57,7 @@ export interface ImageInfo {
 }
 
 // File processing status
-export type FileStatus = 'pending' | 'processing' | 'completed' | 'error';
+export type FileStatus = "pending" | "processing" | "completed" | "error";
 
 // File item for UI
 export interface FileItem {
@@ -73,4 +73,4 @@ export interface FileItem {
 }
 
 // App state
-export type ProcessingState = 'idle' | 'processing' | 'completed' | 'error';
+export type ProcessingState = "idle" | "processing" | "completed" | "error";

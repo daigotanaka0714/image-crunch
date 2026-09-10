@@ -32,7 +32,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -45,10 +45,10 @@ jobs:
           pnpm install
           echo "::endgroup::"
 
-      - name: Check Prettier formatting
+      - name: Check Biome (format + lint)
         run: |
-          echo "::group::prettier check"
-          pnpm format:check
+          echo "::group::biome check"
+          pnpm lint
           echo "::endgroup::"
 
       - name: Check Rust formatting
@@ -63,10 +63,20 @@ jobs:
           pnpm run build
           echo "::endgroup::"
 
-      - name: Check Rust
+      # cargo の設定探索はカレントディレクトリ基準なので、
+      # --manifest-path ではなく src-tauri に cd してから叩く（bin/agent-check と同じ）。
+      - name: Check Rust (clippy)
+        working-directory: ./src-tauri
         run: |
-          echo "::group::Check Rust"
-          cargo check --manifest-path src-tauri/Cargo.toml
+          echo "::group::cargo clippy"
+          cargo clippy --all-targets -- -D warnings
+          echo "::endgroup::"
+
+      - name: Test Rust
+        working-directory: ./src-tauri
+        run: |
+          echo "::group::cargo test"
+          cargo test
           echo "::endgroup::"
 
       - name: Build Tauri app (debug, no bundle)

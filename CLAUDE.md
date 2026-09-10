@@ -77,3 +77,46 @@ Image Crunch is a Tauri v2 desktop app for batch image optimization and format c
 ### カスタムコマンド
 - `/bugfix` - 体系的なバグ調査・修正ワークフロー
 - `/investigate` - コードベースの網羅的調査
+
+## エージェントの完了条件
+
+作業が「終わった」と言えるのは、次の3つをすべて満たしたときだけ。
+
+1. `./bin/agent-check` が `STATUS: PASS` を返している
+2. 変更が依頼された範囲に収まっている
+3. main ではないブランチから PR を作成している
+
+### 禁止事項
+
+- **main への直接 push は禁止。** 必ずブランチを切って PR を作る。
+- **マージは行わない。** `git merge` / `gh pr merge` / `wt merge` はすべて禁止。
+  PR のレビューとマージは人間が行う。
+- **`bin/agent-check` を「通すために」書き換えない。** ゲートを緩める変更は、
+  それ自体を独立した PR として提案し、理由を説明すること。
+- ルールを off にして lint を通さない。指摘は直す。
+
+### ゲートの中身
+
+| ステージ | コマンド | 対象 |
+|---|---|---|
+| lint | `biome check .` | 書式 + lint（Prettier / ESLint は使わない） |
+| typecheck | `tsc --noEmit` | 型 |
+| build | `vite build` | フロントのビルド |
+| rustfmt | `cargo fmt --check` | src-tauri に差分があるときだけ |
+| clippy | `cargo clippy --all-targets -- -D warnings` | 同上 |
+| rusttest | `cargo test` | 同上 |
+
+`NODE_ENV` はステージ単位で指定している。スクリプト全体で固定しないこと
+（理由は `bin/agent-check` 冒頭のコメントを参照）。
+
+CI（`.github/workflows/ci.yml`）は同じ検査を行う。
+**片方だけを変更しないこと。** ローカルと CI がずれると、
+エージェントは「CI は通るのに手元が赤い」状態で迷走する。
+
+### 並列作業
+
+worktree を使って複数のエージェントを同時に走らせる場合:
+
+- 同じファイルを触るタスクを同時に出さない
+- 各エージェントは自分の worktree で `bin/agent-check` を通してから PR を作る
+- `wt step copy-ignored` は使わない（`.config/wt.toml` のコメント参照）
