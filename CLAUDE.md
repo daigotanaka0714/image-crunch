@@ -112,6 +112,18 @@ Image Crunch is a Tauri v2 desktop app for batch image optimization and format c
 加えて `vite.config.ts` が vitest 実行時に `NODE_ENV=test` を強制するので、
 `pnpm test` を直接叩いた場合も同じ結果になる。
 
+### バージョンの固定
+
+ツールのバージョンは**1か所にだけ**書く。CI とローカルで別々に指定しない。
+
+| 対象 | 唯一の出どころ | CI 側 |
+|---|---|---|
+| Node | `.node-version` | `node-version-file: '.node-version'` |
+| pnpm | `package.json` の `packageManager` | `pnpm/action-setup`（`version:` を書かない） |
+
+過去に CI 側へ pnpm 9 / Node 20 を直接書いていたため、ローカルの
+pnpm 12 / Node 22 とずれて CI だけが落ちた。値を2か所に持たせないこと。
+
 CI（`.github/workflows/ci.yml`）は同じ検査を行う。
 **片方だけを変更しないこと。** ローカルと CI がずれると、
 エージェントは「CI は通るのに手元が赤い」状態で迷走する。

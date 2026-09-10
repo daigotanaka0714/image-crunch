@@ -31,7 +31,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # バージョンはここに書かない。.node-version を唯一の出どころにする。
+          # 以前ここに 20 を固定していたため、ローカルの 22 とずれて
+          # jsdom 30 が Node 22 以降の API を要求して CI だけ落ちた。
+          node-version-file: '.node-version'
 
       - name: Install pnpm
         # バージョンはここに書かない。package.json の packageManager を唯一の
