@@ -46,7 +46,8 @@
     "overall": "Overall",
     "average": "Average",
     "median": "Median",
-    "reduction": "reduction"
+    "reduction": "reduction",
+    "failed": "Failed: {{n}} file(s)"
   },
   "actions": {
     "start": "Start Conversion",

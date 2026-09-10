@@ -214,5 +214,8 @@ describe("ResultsPanel", () => {
 
     expect(screen.getByText("結果")).toBeInTheDocument();
     expect(screen.getByText("8 / 10 ファイル")).toBeInTheDocument();
+    // 失敗件数の行だけ英語固定になっていた回帰を防ぐ
+    expect(screen.getByText("2 ファイルが失敗しました")).toBeInTheDocument();
+    expect(screen.queryByText(/Failed:/)).not.toBeInTheDocument();
   });
 });

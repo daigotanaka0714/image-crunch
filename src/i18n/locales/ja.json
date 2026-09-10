@@ -46,7 +46,8 @@
     "overall": "全体",
     "average": "平均",
     "median": "中央値",
-    "reduction": "削減"
+    "reduction": "削減",
+    "failed": "{{n}} ファイルが失敗しました"
   },
   "actions": {
     "start": "変換開始",
