@@ -65,6 +65,12 @@ jobs:
           pnpm run build
           echo "::endgroup::"
 
+      - name: Test frontend
+        run: |
+          echo "::group::vitest"
+          pnpm test:run
+          echo "::endgroup::"
+
       # cargo の設定探索はカレントディレクトリ基準なので、
       # --manifest-path ではなく src-tauri に cd してから叩く（bin/agent-check と同じ）。
       - name: Check Rust (clippy)

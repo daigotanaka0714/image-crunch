@@ -101,6 +101,7 @@ Image Crunch is a Tauri v2 desktop app for batch image optimization and format c
 |---|---|---|
 | lint | `biome check .` | 書式 + lint（Prettier / ESLint は使わない） |
 | typecheck | `tsc --noEmit` | 型 |
+| test | `vitest run` | フロントのテスト |
 | build | `vite build` | フロントのビルド |
 | rustfmt | `cargo fmt --check` | src-tauri に差分があるときだけ |
 | clippy | `cargo clippy --all-targets -- -D warnings` | 同上 |
@@ -108,6 +109,8 @@ Image Crunch is a Tauri v2 desktop app for batch image optimization and format c
 
 `NODE_ENV` はステージ単位で指定している。スクリプト全体で固定しないこと
 （理由は `bin/agent-check` 冒頭のコメントを参照）。
+加えて `vite.config.ts` が vitest 実行時に `NODE_ENV=test` を強制するので、
+`pnpm test` を直接叩いた場合も同じ結果になる。
 
 CI（`.github/workflows/ci.yml`）は同じ検査を行う。
 **片方だけを変更しないこと。** ローカルと CI がずれると、
