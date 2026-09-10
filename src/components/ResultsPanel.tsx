@@ -129,7 +129,7 @@ export function ResultsPanel() {
           {batchStats.failed_files > 0 && (
             <div className="flex items-center gap-2 text-sm text-rose-600 bg-rose-50 rounded-xl px-4 py-2.5">
               <AlertCircleIcon className="w-4 h-4" />
-              <span>Failed: {batchStats.failed_files} file(s)</span>
+              <span>{t("results.failed", { n: batchStats.failed_files })}</span>
             </div>
           )}
         </div>
