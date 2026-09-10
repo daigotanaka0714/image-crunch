@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DownloadIcon, XIcon } from "./Icons";
+import { AlertCircleIcon, DownloadIcon, XIcon } from "./Icons";
 
 interface UpdateInfo {
   update_available: boolean;
@@ -17,6 +17,7 @@ export function UpdateNotification() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const checkUpdate = async () => {
@@ -24,7 +25,11 @@ export function UpdateNotification() {
         const info = await invoke<UpdateInfo>("check_for_updates");
         setUpdateInfo(info);
       } catch (error) {
+        // Rust 側は通信失敗も 403 も Err で返してくる。ここで握り潰すと
+        // 「更新が無い」のか「チェックが壊れている」のかを利用者が区別できない。
+        // 原因の切り分けにはログが要るので、console には出したうえで表示もする。
         console.error("Failed to check for updates:", error);
+        setFailed(true);
       } finally {
         setChecking(false);
       }
@@ -43,7 +48,28 @@ export function UpdateNotification() {
     setDismissed(true);
   };
 
-  if (checking || !updateInfo?.update_available || dismissed) {
+  if (checking || dismissed) {
+    return null;
+  }
+
+  if (failed) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl shadow-sm flex items-center gap-3 animate-fadeIn">
+        <AlertCircleIcon className="w-5 h-5 text-amber-500 flex-shrink-0" />
+        <span className="flex-1 text-sm">{t("update.checkFailed")}</span>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          className="p-1.5 hover:bg-amber-100 rounded-lg transition-colors"
+          aria-label={t("update.dismiss")}
+        >
+          <XIcon className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  if (!updateInfo?.update_available) {
     return null;
   }
 
