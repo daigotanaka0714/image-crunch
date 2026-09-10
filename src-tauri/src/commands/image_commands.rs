@@ -33,6 +33,45 @@ pub struct ProgressUpdate {
     pub percent: f64,
 }
 
+/// Destination for events sent to the frontend.
+///
+/// `tauri::Emitter` is sealed and an `AppHandle` cannot be built outside a
+/// running app, so batch processing emits through this trait instead. That lets
+/// the tests run a whole batch against an emitter that always fails.
+pub(crate) trait EventEmitter {
+    fn emit_event<S: Serialize + Clone>(&self, event: &str, payload: S) -> Result<(), String>;
+}
+
+impl EventEmitter for AppHandle {
+    fn emit_event<S: Serialize + Clone>(&self, event: &str, payload: S) -> Result<(), String> {
+        self.emit(event, payload).map_err(|e| e.to_string())
+    }
+}
+
+/// Where messages about failed emissions go.
+type LogSink<'a> = &'a (dyn Fn(String) + Sync);
+
+/// Default log sink: stderr.
+fn log_to_stderr(message: String) {
+    eprintln!("[image-crunch] {}", message);
+}
+
+/// Emit an event, recording any failure instead of discarding it.
+///
+/// The failure is logged and processing continues: one lost notification must
+/// not abort a batch that is already half done, but it must not be invisible
+/// either - a dropped `processing-complete` is what used to leave the UI stuck
+/// in the `processing` state.
+fn emit_or_log<E, S>(emitter: &E, event: &str, payload: S, log: LogSink<'_>)
+where
+    E: EventEmitter,
+    S: Serialize + Clone,
+{
+    if let Err(err) = emitter.emit_event(event, payload) {
+        log(format!("failed to emit \"{}\" event: {}", event, err));
+    }
+}
+
 /// Get list of image files from paths (supports files and directories)
 #[tauri::command]
 pub fn get_image_files(paths: Vec<String>) -> Result<Vec<String>, String> {
@@ -112,6 +151,17 @@ pub async fn process_batch(
     output_dir: String,
     options: ProcessingOptions,
 ) -> Result<BatchStats, String> {
+    process_batch_with(&app, input_paths, output_dir, options, &log_to_stderr)
+}
+
+/// Batch processing itself, generic over the event emitter and the log sink.
+fn process_batch_with<E: EventEmitter + Sync>(
+    emitter: &E,
+    input_paths: Vec<String>,
+    output_dir: String,
+    options: ProcessingOptions,
+    log: LogSink<'_>,
+) -> Result<BatchStats, String> {
     let total_files = input_paths.len();
     let output_dir_path = PathBuf::from(&output_dir);
 
@@ -164,7 +214,8 @@ pub async fn process_batch(
                 let current = processed_count.fetch_add(1, Ordering::SeqCst) + 1;
 
                 // Emit progress update
-                let _ = app.emit(
+                emit_or_log(
+                    emitter,
                     "processing-progress",
                     ProgressUpdate {
                         current,
@@ -172,10 +223,11 @@ pub async fn process_batch(
                         current_file: input_path.clone(),
                         percent: (current as f64 / total_files as f64) * 100.0,
                     },
+                    log,
                 );
 
                 // Emit individual file result
-                let _ = app.emit("processing-result", &result);
+                emit_or_log(emitter, "processing-result", &result, log);
 
                 result
             })
@@ -186,7 +238,7 @@ pub async fn process_batch(
     let stats = calculate_batch_stats(&results);
 
     // Emit completion event
-    let _ = app.emit("processing-complete", &stats);
+    emit_or_log(emitter, "processing-complete", &stats, log);
 
     Ok(stats)
 }
@@ -275,4 +327,143 @@ pub struct ImageInfo {
     pub height: u32,
     pub size_bytes: u64,
     pub format: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicU32;
+    use std::sync::Mutex;
+
+    /// Emitter that always fails, standing in for a webview that went away
+    /// mid-batch.
+    struct FailingEmitter;
+
+    impl EventEmitter for FailingEmitter {
+        fn emit_event<S: Serialize + Clone>(
+            &self,
+            _event: &str,
+            _payload: S,
+        ) -> Result<(), String> {
+            Err("webview channel closed".to_string())
+        }
+    }
+
+    struct OkEmitter;
+
+    impl EventEmitter for OkEmitter {
+        fn emit_event<S: Serialize + Clone>(
+            &self,
+            _event: &str,
+            _payload: S,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    static TEST_DIR_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+    /// Create a unique scratch directory for one test.
+    fn scratch_dir(name: &str) -> PathBuf {
+        let id = TEST_DIR_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!(
+            "image-crunch-{}-{}-{}",
+            name,
+            std::process::id(),
+            id
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("failed to create scratch dir");
+        dir
+    }
+
+    /// Write a small valid PNG and return its path.
+    fn write_png(dir: &Path, name: &str) -> String {
+        let path = dir.join(name);
+        image::RgbaImage::from_pixel(8, 8, image::Rgba([12, 34, 56, 255]))
+            .save(&path)
+            .expect("failed to write test png");
+        path.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn emit_failure_is_logged_with_event_name_and_cause() {
+        let logged = Mutex::new(Vec::new());
+
+        emit_or_log(&FailingEmitter, "processing-complete", (), &|message| {
+            logged.lock().unwrap().push(message)
+        });
+
+        let logged = logged.into_inner().unwrap();
+        assert_eq!(
+            logged.len(),
+            1,
+            "emit failure must leave exactly one record"
+        );
+        assert!(
+            logged[0].contains("processing-complete"),
+            "log must name the event: {:?}",
+            logged[0]
+        );
+        assert!(
+            logged[0].contains("webview channel closed"),
+            "log must carry the cause: {:?}",
+            logged[0]
+        );
+    }
+
+    #[test]
+    fn successful_emit_logs_nothing() {
+        let logged = Mutex::new(Vec::new());
+
+        emit_or_log(&OkEmitter, "processing-progress", (), &|message| {
+            logged.lock().unwrap().push(message)
+        });
+
+        assert!(logged.into_inner().unwrap().is_empty());
+    }
+
+    #[test]
+    fn batch_finishes_and_logs_every_failed_emit() {
+        let dir = scratch_dir("batch-emit-failure");
+        let input_dir = dir.join("input");
+        std::fs::create_dir_all(&input_dir).expect("failed to create input dir");
+        let inputs = vec![
+            write_png(&input_dir, "a.png"),
+            write_png(&input_dir, "b.png"),
+        ];
+        let output_dir = dir.join("output").to_string_lossy().to_string();
+        let logged = Mutex::new(Vec::new());
+
+        let stats = process_batch_with(
+            &FailingEmitter,
+            inputs,
+            output_dir,
+            ProcessingOptions::default(),
+            &|message| logged.lock().unwrap().push(message),
+        )
+        .expect("batch must finish even when every emit fails");
+
+        // Failing notifications must not take the batch down with them.
+        assert_eq!(stats.total_files, 2);
+        assert_eq!(stats.successful_files, 2);
+        assert_eq!(stats.failed_files, 0);
+
+        // ...but each failure has to be traceable to the event it belongs to.
+        let logged = logged.into_inner().unwrap();
+        for event in [
+            "processing-progress",
+            "processing-result",
+            "processing-complete",
+        ] {
+            assert!(
+                logged.iter().any(|message| message.contains(event)),
+                "no log for failed \"{}\" emit: {:?}",
+                event,
+                logged
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
