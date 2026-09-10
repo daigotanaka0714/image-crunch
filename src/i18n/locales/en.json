@@ -71,6 +71,7 @@
     "available": "New version available!",
     "description": "Download the latest version for new features and improvements.",
     "download": "Download",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "checkFailed": "Could not check for updates. Please try again later."
   }
 }
