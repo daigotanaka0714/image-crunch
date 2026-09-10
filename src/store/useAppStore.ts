@@ -1,12 +1,12 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 import type {
-  ProcessingOptions,
-  FileItem,
-  ProcessingState,
   BatchStats,
-  ProgressUpdate,
+  FileItem,
   FileStatus,
-} from '../types';
+  ProcessingOptions,
+  ProcessingState,
+  ProgressUpdate,
+} from "../types";
 
 interface AppState {
   // Files
@@ -14,7 +14,11 @@ interface AppState {
   addFiles: (files: FileItem[]) => void;
   removeFile: (path: string) => void;
   clearFiles: () => void;
-  updateFileStatus: (path: string, status: FileStatus, result?: Partial<FileItem>) => void;
+  updateFileStatus: (
+    path: string,
+    status: FileStatus,
+    result?: Partial<FileItem>,
+  ) => void;
   resetFileStatuses: () => void;
 
   // Processing options
@@ -46,12 +50,12 @@ interface AppState {
 }
 
 const defaultOptions: ProcessingOptions = {
-  format: 'webp',
+  format: "webp",
   quality: 80,
   width: null,
   height: null,
   keep_metadata: false,
-  compression: 'lossy',
+  compression: "lossy",
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -61,23 +65,28 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       files: [
         ...state.files,
-        ...newFiles.filter((newFile) => !state.files.some((f) => f.path === newFile.path)),
+        ...newFiles.filter(
+          (newFile) => !state.files.some((f) => f.path === newFile.path),
+        ),
       ],
     })),
   removeFile: (path) =>
     set((state) => ({
       files: state.files.filter((f) => f.path !== path),
     })),
-  clearFiles: () => set({ files: [], batchStats: null, processingState: 'idle' }),
+  clearFiles: () =>
+    set({ files: [], batchStats: null, processingState: "idle" }),
   updateFileStatus: (path, status, result) =>
     set((state) => ({
-      files: state.files.map((f) => (f.path === path ? { ...f, status, ...result } : f)),
+      files: state.files.map((f) =>
+        f.path === path ? { ...f, status, ...result } : f,
+      ),
     })),
   resetFileStatuses: () =>
     set((state) => ({
       files: state.files.map((f) => ({
         ...f,
-        status: 'pending' as const,
+        status: "pending" as const,
         outputPath: undefined,
         outputSize: undefined,
         reductionPercent: undefined,
@@ -93,11 +102,11 @@ export const useAppStore = create<AppState>((set) => ({
     })),
 
   // Output directory
-  outputDir: '',
+  outputDir: "",
   setOutputDir: (dir) => set({ outputDir: dir }),
 
   // Processing state
-  processingState: 'idle',
+  processingState: "idle",
   setProcessingState: (processingState) => set({ processingState }),
 
   // Progress
@@ -116,7 +125,7 @@ export const useAppStore = create<AppState>((set) => ({
   reset: () =>
     set({
       files: [],
-      processingState: 'idle',
+      processingState: "idle",
       progress: null,
       batchStats: null,
       error: null,

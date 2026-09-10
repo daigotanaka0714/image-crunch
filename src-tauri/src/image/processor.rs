@@ -12,10 +12,6 @@ pub enum ProcessError {
     ReadError(String),
     #[error("Failed to write image: {0}")]
     WriteError(String),
-    #[error("Unsupported format: {0}")]
-    UnsupportedFormat(String),
-    #[error("Processing failed: {0}")]
-    ProcessingFailed(String),
 }
 
 /// Compression type
@@ -197,5 +193,22 @@ impl ImageProcessor {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_error_messages() {
+        assert_eq!(
+            ProcessError::ReadError("a.png".into()).to_string(),
+            "Failed to read image: a.png"
+        );
+        assert_eq!(
+            ProcessError::WriteError("b.png".into()).to_string(),
+            "Failed to write image: b.png"
+        );
     }
 }

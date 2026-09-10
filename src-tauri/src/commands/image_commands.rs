@@ -224,7 +224,7 @@ fn calculate_batch_stats(results: &[ProcessingResult]) -> BatchStats {
     let median_reduction_percent = if !reductions.is_empty() {
         reductions.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let mid = reductions.len() / 2;
-        if reductions.len() % 2 == 0 {
+        if reductions.len().is_multiple_of(2) {
             (reductions[mid - 1] + reductions[mid]) / 2.0
         } else {
             reductions[mid]

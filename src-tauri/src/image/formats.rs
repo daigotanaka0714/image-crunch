@@ -56,18 +56,6 @@ impl OutputFormat {
             Self::WebP => "webp",
         }
     }
-
-    /// Get MIME type for this format
-    pub fn mime_type(&self) -> &'static str {
-        match self {
-            Self::Jpeg => "image/jpeg",
-            Self::Png => "image/png",
-            Self::Gif => "image/gif",
-            Self::Bmp => "image/bmp",
-            Self::Tiff => "image/tiff",
-            Self::WebP => "image/webp",
-        }
-    }
 }
 
 #[cfg(test)]

@@ -1,14 +1,14 @@
-import { useTranslation } from 'react-i18next';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
-} from '@tauri-apps/plugin-notification';
-import { useAppStore } from '../store/useAppStore';
-import { PlayIcon, SpinnerIcon, XIcon } from './Icons';
-import type { BatchStats, ProgressUpdate, ProcessingResult } from '../types';
+} from "@tauri-apps/plugin-notification";
+import { useTranslation } from "react-i18next";
+import { useAppStore } from "../store/useAppStore";
+import type { BatchStats, ProcessingResult, ProgressUpdate } from "../types";
+import { PlayIcon, SpinnerIcon, XIcon } from "./Icons";
 
 export function ActionButtons() {
   const { t } = useTranslation();
@@ -25,7 +25,7 @@ export function ActionButtons() {
     resetFileStatuses,
   } = useAppStore();
 
-  const isProcessing = processingState === 'processing';
+  const isProcessing = processingState === "processing";
   const canStart = files.length > 0 && outputDir && !isProcessing;
 
   // Send desktop notification
@@ -34,81 +34,90 @@ export function ActionButtons() {
       let permissionGranted = await isPermissionGranted();
       if (!permissionGranted) {
         const permission = await requestPermission();
-        permissionGranted = permission === 'granted';
+        permissionGranted = permission === "granted";
       }
 
       if (permissionGranted) {
-        const body = t('notification.body', {
+        const body = t("notification.body", {
           count: stats.successful_files,
           reduction: stats.overall_reduction_percent.toFixed(1),
         });
         sendNotification({
-          title: 'Image Crunch',
+          title: "Image Crunch",
           body,
         });
       }
     } catch (error) {
-      console.error('Failed to send notification:', error);
+      console.error("Failed to send notification:", error);
     }
   };
 
   const handleStart = async () => {
     if (!canStart) {
       if (files.length === 0) {
-        setError(t('errors.noFiles'));
+        setError(t("errors.noFiles"));
       } else if (!outputDir) {
-        setError(t('errors.noOutputDir'));
+        setError(t("errors.noOutputDir"));
       }
       return;
     }
 
-    setProcessingState('processing');
+    setProcessingState("processing");
     setError(null);
     setBatchStats(null);
     resetFileStatuses();
 
     // Listen for progress updates
-    const unlistenProgress = await listen<ProgressUpdate>('processing-progress', (event) => {
-      setProgress(event.payload);
-      // Update current file status to processing
-      updateFileStatus(event.payload.current_file, 'processing');
-    });
+    const unlistenProgress = await listen<ProgressUpdate>(
+      "processing-progress",
+      (event) => {
+        setProgress(event.payload);
+        // Update current file status to processing
+        updateFileStatus(event.payload.current_file, "processing");
+      },
+    );
 
     // Listen for individual file results
-    const unlistenResult = await listen<ProcessingResult>('processing-result', (event) => {
-      const result = event.payload;
-      if (result.success) {
-        updateFileStatus(result.original_path, 'completed', {
-          outputPath: result.output_path,
-          outputSize: result.output_size,
-          reductionPercent: result.reduction_percent,
-        });
-      } else {
-        updateFileStatus(result.original_path, 'error', {
-          error: result.error || t('errors.unknown'),
-        });
-      }
-    });
+    const unlistenResult = await listen<ProcessingResult>(
+      "processing-result",
+      (event) => {
+        const result = event.payload;
+        if (result.success) {
+          updateFileStatus(result.original_path, "completed", {
+            outputPath: result.output_path,
+            outputSize: result.output_size,
+            reductionPercent: result.reduction_percent,
+          });
+        } else {
+          updateFileStatus(result.original_path, "error", {
+            error: result.error || t("errors.unknown"),
+          });
+        }
+      },
+    );
 
     // Listen for completion
-    const unlistenComplete = await listen<BatchStats>('processing-complete', (event) => {
-      setBatchStats(event.payload);
-      setProcessingState('completed');
-      // Send desktop notification
-      sendCompletionNotification(event.payload);
-    });
+    const unlistenComplete = await listen<BatchStats>(
+      "processing-complete",
+      (event) => {
+        setBatchStats(event.payload);
+        setProcessingState("completed");
+        // Send desktop notification
+        sendCompletionNotification(event.payload);
+      },
+    );
 
     try {
       const inputPaths = files.map((f) => f.path);
-      await invoke('process_batch', {
+      await invoke("process_batch", {
         inputPaths,
         outputDir,
         options,
       });
     } catch (error) {
-      console.error('Processing failed:', error);
-      setError(t('errors.processingFailed') + ': ' + String(error));
-      setProcessingState('error');
+      console.error("Processing failed:", error);
+      setError(`${t("errors.processingFailed")}: ${String(error)}`);
+      setProcessingState("error");
     } finally {
       unlistenProgress();
       unlistenResult();
@@ -120,13 +129,14 @@ export function ActionButtons() {
   const handleCancel = () => {
     // For now, we just reset the state
     // In a future version, we could implement actual cancellation
-    setProcessingState('idle');
+    setProcessingState("idle");
     setProgress(null);
   };
 
   return (
     <div className="flex gap-4 pt-2">
       <button
+        type="button"
         onClick={handleStart}
         disabled={!canStart}
         className={`
@@ -135,26 +145,27 @@ export function ActionButtons() {
           transition-all duration-200 ease-out
           ${
             canStart
-              ? 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+              ? "bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]"
+              : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
           }
         `}
       >
         {isProcessing ? (
           <>
             <SpinnerIcon className="w-5 h-5 animate-spin" />
-            <span>{t('actions.processing')}</span>
+            <span>{t("actions.processing")}</span>
           </>
         ) : (
           <>
             <PlayIcon className="w-5 h-5" />
-            <span>{t('actions.start')}</span>
+            <span>{t("actions.start")}</span>
           </>
         )}
       </button>
 
       {isProcessing && (
         <button
+          type="button"
           onClick={handleCancel}
           className="
             flex items-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-white
@@ -167,7 +178,7 @@ export function ActionButtons() {
           "
         >
           <XIcon className="w-5 h-5" />
-          <span>{t('actions.cancel')}</span>
+          <span>{t("actions.cancel")}</span>
         </button>
       )}
     </div>

@@ -1,7 +1,7 @@
-export { DropZone } from './DropZone';
-export { FileList } from './FileList';
-export { SettingsPanel } from './SettingsPanel';
-export { ResultsPanel } from './ResultsPanel';
-export { ActionButtons } from './ActionButtons';
-export { LanguageSwitcher } from './LanguageSwitcher';
-export { UpdateNotification } from './UpdateNotification';
+export { ActionButtons } from "./ActionButtons";
+export { DropZone } from "./DropZone";
+export { FileList } from "./FileList";
+export { LanguageSwitcher } from "./LanguageSwitcher";
+export { ResultsPanel } from "./ResultsPanel";
+export { SettingsPanel } from "./SettingsPanel";
+export { UpdateNotification } from "./UpdateNotification";

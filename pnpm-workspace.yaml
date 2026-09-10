@@ -1,0 +1,4 @@
+# pnpm 11 以降はビルドスクリプトの実行を明示的に許可する必要がある。
+# esbuild は vite が使うので許可する。
+allowBuilds:
+  esbuild: true

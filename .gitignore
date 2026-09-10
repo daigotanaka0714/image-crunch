@@ -24,6 +24,8 @@ dist-ssr
 
 .playwright-mcp/*
 .claude/*
+# 事前許可リストは共有したいので追跡する（settings.local.json は個人設定なので除外のまま）
+!.claude/settings.json
 specs/*
 
 # Generated dev icons (can be regenerated with pnpm icons:generate)
