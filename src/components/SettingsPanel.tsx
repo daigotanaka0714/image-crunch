@@ -272,7 +272,6 @@ export function SettingsPanel() {
               id="settings-output-dir"
               type="text"
               value={outputDir}
-              onChange={(e) => setOutputDir(e.target.value)}
               disabled={isProcessing}
               className="flex-1 custom-input bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-600 disabled:opacity-50"
               readOnly

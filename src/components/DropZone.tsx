@@ -18,6 +18,15 @@ const ACCEPTED_EXTENSIONS = [
   "webp",
 ];
 
+// パスの末尾（ファイル名）を取り出す。
+// Tauri が返すパスは OS 依存で、Windows では "\\" 区切りになる。
+// 片方の区切りだけで split して pop すると、もう一方の OS では
+// パス全体が 1 要素として返ってきてしまうため、両方の区切りで分割する。
+function basename(path: string): string {
+  const segments = path.split(/[/\\]/);
+  return segments[segments.length - 1] || path;
+}
+
 export function DropZone() {
   const { t } = useTranslation();
   const { addFiles, processingState } = useAppStore();
@@ -34,7 +43,7 @@ export function DropZone() {
 
         const fileItems: FileItem[] = imagePaths.map((path) => ({
           path,
-          name: path.split("/").pop() || path.split("\\").pop() || path,
+          name: basename(path),
           size: 0, // Will be populated when processing
           status: "pending" as const,
         }));
@@ -54,6 +63,10 @@ export function DropZone() {
   // Set up Tauri drag and drop event listener
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    // onDragDropEvent の解決前にアンマウントされたかどうか。
+    // cleanup 時点では unlisten がまだ未代入なので、この印が無いと
+    // 後から確立した購読が解除されずに残る。
+    let disposed = false;
 
     const setupDragDrop = async () => {
       // Check if running in Tauri environment
@@ -66,7 +79,7 @@ export function DropZone() {
 
       try {
         const currentWindow = getCurrentWindow();
-        unlisten = await currentWindow.onDragDropEvent((event) => {
+        const stop = await currentWindow.onDragDropEvent((event) => {
           if (event.payload.type === "over") {
             setIsDragActive(true);
           } else if (event.payload.type === "drop") {
@@ -76,6 +89,13 @@ export function DropZone() {
             setIsDragActive(false);
           }
         });
+
+        // 確立を待っている間にアンマウントされていたら、その場で解除する
+        if (disposed) {
+          stop();
+          return;
+        }
+        unlisten = stop;
       } catch (error) {
         console.error("Failed to set up drag and drop:", error);
       }
@@ -84,6 +104,7 @@ export function DropZone() {
     setupDragDrop();
 
     return () => {
+      disposed = true;
       if (unlisten) {
         unlisten();
       }

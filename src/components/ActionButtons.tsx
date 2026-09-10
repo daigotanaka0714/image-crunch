@@ -5,6 +5,7 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../store/useAppStore";
 import type { BatchStats, ProcessingResult, ProgressUpdate } from "../types";
@@ -27,6 +28,16 @@ export function ActionButtons() {
 
   const isProcessing = processingState === "processing";
   const canStart = files.length > 0 && outputDir && !isProcessing;
+
+  // 実行ごとの通し番号。開始で 1 つ進み、キャンセルでも 1 つ進む。
+  // 各ハンドラは自分が始まったときの番号を覚えていて、番号がずれたら
+  // 「もう自分の実行ではない」と判断して store に触らない。
+  // これでキャンセル後や次の実行の開始後に遅れて届いたイベント・戻り値が
+  // 現在の状態を上書きするのを防ぐ。
+  const runIdRef = useRef(0);
+  // 現在の実行の購読解除。キャンセル時にも handleStart の finally でも
+  // 呼ばれるので、二重に呼ばれても平気なようにしてある。
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Send desktop notification
   const sendCompletionNotification = async (stats: BatchStats) => {
@@ -62,6 +73,11 @@ export function ActionButtons() {
       return;
     }
 
+    const runId = runIdRef.current + 1;
+    runIdRef.current = runId;
+    // この実行がまだ「現在の実行」かどうか。キャンセルや次の実行の開始で false になる。
+    const isCurrentRun = () => runIdRef.current === runId;
+
     setProcessingState("processing");
     setError(null);
     setBatchStats(null);
@@ -71,6 +87,7 @@ export function ActionButtons() {
     const unlistenProgress = await listen<ProgressUpdate>(
       "processing-progress",
       (event) => {
+        if (!isCurrentRun()) return;
         setProgress(event.payload);
         // Update current file status to processing
         updateFileStatus(event.payload.current_file, "processing");
@@ -81,6 +98,7 @@ export function ActionButtons() {
     const unlistenResult = await listen<ProcessingResult>(
       "processing-result",
       (event) => {
+        if (!isCurrentRun()) return;
         const result = event.payload;
         if (result.success) {
           updateFileStatus(result.original_path, "completed", {
@@ -100,6 +118,10 @@ export function ActionButtons() {
     // 戻り値のどちらが先に届いても、先着だけを採用する。
     let completionHandled = false;
     const handleCompletion = (stats: BatchStats) => {
+      // キャンセル済み・別の実行が始まったあとの完了は捨てる。
+      // これが無いと、キャンセルで idle に戻したあと完了イベントや
+      // process_batch の戻り値が届いた時点で completed に戻ってしまう。
+      if (!isCurrentRun()) return;
       if (completionHandled) return;
       completionHandled = true;
       setBatchStats(stats);
@@ -116,6 +138,17 @@ export function ActionButtons() {
       },
     );
 
+    // 購読解除はキャンセルと finally の両方から呼ばれうるので、1 回だけ効くようにする。
+    let unsubscribed = false;
+    const unsubscribe = () => {
+      if (unsubscribed) return;
+      unsubscribed = true;
+      unlistenProgress();
+      unlistenResult();
+      unlistenComplete();
+    };
+    unsubscribeRef.current = unsubscribe;
+
     try {
       const inputPaths = files.map((f) => f.path);
       const stats = await invoke<BatchStats>("process_batch", {
@@ -128,19 +161,34 @@ export function ActionButtons() {
       handleCompletion(stats);
     } catch (error) {
       console.error("Processing failed:", error);
-      setError(`${t("errors.processingFailed")}: ${String(error)}`);
-      setProcessingState("error");
+      // キャンセル後に届いた失敗も、現在の表示には反映しない。
+      if (isCurrentRun()) {
+        setError(`${t("errors.processingFailed")}: ${String(error)}`);
+        setProcessingState("error");
+      }
     } finally {
-      unlistenProgress();
-      unlistenResult();
-      unlistenComplete();
-      setProgress(null);
+      unsubscribe();
+      if (isCurrentRun()) {
+        setProgress(null);
+        unsubscribeRef.current = null;
+      }
     }
   };
 
+  // キャンセルは「表示上の中断」であって、処理そのものは止まらない。
+  //
+  // Rust 側の process_batch は rayon で全ファイルを処理しきるまで戻らず、
+  // 中断させる手段（中断フラグや専用コマンド）を持っていない。
+  // つまりこのボタンを押しても、バックグラウンドでの変換は最後まで走り、
+  // 出力ファイルも書き出される。止まるのは画面の表示だけ。
+  //
+  // ここでできるのは、その実行の結果を画面に反映させないことだけ。
+  // 実行番号を進めて古い実行のハンドラと戻り値を無効化し、購読も解除する。
+  // 実際に処理を止めるには Rust 側に中断の仕組みを入れる必要がある。
   const handleCancel = () => {
-    // For now, we just reset the state
-    // In a future version, we could implement actual cancellation
+    runIdRef.current += 1;
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
     setProcessingState("idle");
     setProgress(null);
   };

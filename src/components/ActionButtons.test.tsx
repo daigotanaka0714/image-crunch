@@ -112,6 +112,13 @@ function startButton() {
   return screen.getByRole("button", { name: i18n.t("actions.start") });
 }
 
+// キャンセルボタンを押す。
+async function cancel(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    screen.getByRole("button", { name: i18n.t("actions.cancel") }),
+  );
+}
+
 // 描画して開始ボタンを押し、invoke が呼ばれるところまで進める。
 async function start() {
   const user = userEvent.setup();
@@ -700,21 +707,107 @@ describe("ActionButtons", () => {
       expect(state.progress).toBeNull();
     });
 
-    it("押しても実際の処理は止まらない（現在の実装では状態を戻すだけ）", async () => {
+    it("押すと購読をすべて解除する", async () => {
       setReady();
       const user = await start();
 
-      await user.click(
-        screen.getByRole("button", { name: i18n.t("actions.cancel") }),
-      );
+      await cancel(user);
 
-      // 購読は解除されないままなので、あとから来た完了イベントで
-      // 状態が completed に戻ってしまう。
-      for (const unlisten of unlisteners.values()) {
-        expect(unlisten).not.toHaveBeenCalled();
+      for (const [event, unlisten] of unlisteners) {
+        expect(unlisten, `${event} が解除されていない`).toHaveBeenCalledTimes(
+          1,
+        );
       }
+    });
+
+    it("キャンセル後に完了イベントが来ても completed に戻らない", async () => {
+      setReady();
+      const user = await start();
+
+      await cancel(user);
+      // 購読解除の前に emit 済みだったイベントが遅れて届く状況を想定して、
+      // 掴んだハンドラを直接叩く。
       await emit("processing-complete", makeStats());
-      expect(useAppStore.getState().processingState).toBe("completed");
+
+      const state = useAppStore.getState();
+      expect(state.processingState).toBe("idle");
+      expect(state.batchStats).toBeNull();
+      expect(sendNotification).not.toHaveBeenCalled();
+    });
+
+    it("キャンセル後に process_batch が戻ってきても completed に戻らない", async () => {
+      setReady();
+      const user = await start();
+
+      await cancel(user);
+      await act(async () => {
+        finishInvoke(makeStats());
+      });
+
+      const state = useAppStore.getState();
+      expect(state.processingState).toBe("idle");
+      expect(state.batchStats).toBeNull();
+      expect(sendNotification).not.toHaveBeenCalled();
+    });
+
+    it("キャンセル後に process_batch が失敗しても error 状態にしない", async () => {
+      setReady();
+      const user = await start();
+
+      await cancel(user);
+      await act(async () => {
+        failInvoke(new Error("boom"));
+      });
+
+      const state = useAppStore.getState();
+      expect(state.processingState).toBe("idle");
+      expect(state.error).toBeNull();
+    });
+
+    it("キャンセル後に進捗イベントが来てもファイルの状態は動かない", async () => {
+      setReady([makeFile("/photos/a.png")]);
+      const user = await start();
+
+      await cancel(user);
+      await emit("processing-progress", makeProgress());
+
+      const state = useAppStore.getState();
+      expect(state.progress).toBeNull();
+      expect(state.files[0].status).toBe("pending");
+    });
+
+    it("キャンセル後に個別結果イベントが来てもファイルの状態は動かない", async () => {
+      setReady([makeFile("/photos/a.png")]);
+      const user = await start();
+
+      await cancel(user);
+      await emit("processing-result", makeResult());
+
+      expect(useAppStore.getState().files[0].status).toBe("pending");
+    });
+
+    it("キャンセルして再実行したあとに前回の完了が届いても、今回の実行を壊さない", async () => {
+      setReady();
+      const user = await start();
+      const staleComplete = handlers.get("processing-complete");
+      const staleFinish = finishInvoke;
+
+      await cancel(user);
+
+      // 2 回目の実行を始める。1 回目の購読とハンドラは別物に差し替わる。
+      await user.click(startButton());
+      await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+
+      // 1 回目の完了イベントと戻り値が、いまごろ届く。
+      await act(async () => {
+        staleComplete?.({ payload: makeStats({ successful_files: 99 }) });
+        staleFinish(makeStats({ successful_files: 99 }));
+      });
+
+      const state = useAppStore.getState();
+      expect(state.processingState).toBe("processing");
+      expect(state.batchStats).toBeNull();
+      expect(sendNotification).not.toHaveBeenCalled();
     });
   });
 });

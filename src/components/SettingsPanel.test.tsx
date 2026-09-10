@@ -307,6 +307,33 @@ describe("SettingsPanel", () => {
       expect(input).toHaveAttribute("readonly");
     });
 
+    it("キーボードで打ち込んでも outputDir は変わらない", async () => {
+      const user = userEvent.setup();
+      useAppStore.setState({ outputDir: "/tmp/out" });
+      renderPanel();
+
+      const input = screen.getByRole("textbox", { name: "Output Directory" });
+      await user.type(input, "/typed/path");
+
+      expect(useAppStore.getState().outputDir).toBe("/tmp/out");
+      expect(input).toHaveValue("/tmp/out");
+    });
+
+    it("change イベントを直接起こしても outputDir は変わらない", () => {
+      useAppStore.setState({ outputDir: "/tmp/out" });
+      renderPanel();
+
+      // readOnly な input に onChange を付け直すと、ここが落ちる。
+      // 出力先は必ずフォルダ選択ダイアログ経由で入る値であって、
+      // 未検証の文字列が store（＝Rust の create_dir_all）に流れてはいけない。
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "Output Directory" }),
+        { target: { value: "/forced/path" } },
+      );
+
+      expect(useAppStore.getState().outputDir).toBe("/tmp/out");
+    });
+
     it("ボタンを押すとフォルダ選択ダイアログを開く", async () => {
       const user = userEvent.setup();
       openDialog.mockResolvedValue("/tmp/selected");
