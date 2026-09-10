@@ -114,6 +114,28 @@ describe("DropZone", () => {
       unmount();
       expect(unlisten).toHaveBeenCalledTimes(1);
     });
+
+    it("購読が確立する前にアンマウントされても解除される", async () => {
+      // onDragDropEvent の Promise をこちらの好きなタイミングで解決させる。
+      let establish: ((stop: () => void) => void) | undefined;
+      onDragDropEvent.mockReturnValue(
+        new Promise<() => void>((resolve) => {
+          establish = resolve;
+        }),
+      );
+
+      const { unmount } = render(<DropZone />);
+
+      // 購読が確立するより先にアンマウントする
+      unmount();
+
+      // その後で購読が確立した場合も、取り残さずに解除する必要がある
+      await act(async () => {
+        establish?.(unlisten);
+      });
+
+      expect(unlisten).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("ドラッグ中の見た目", () => {
@@ -168,6 +190,22 @@ describe("DropZone", () => {
       expect(useAppStore.getState().files).toEqual([
         {
           path: "/photos/sub/a.png",
+          name: "a.png",
+          size: 0,
+          status: "pending",
+        },
+      ]);
+    });
+
+    it("Windows のパスでも名前はパス末尾になる", async () => {
+      invoke.mockResolvedValue(["C:\\photos\\sub\\a.png"]);
+      const { emit } = await renderDropZone();
+
+      await emit({ type: "drop", paths: ["C:\\photos"] });
+
+      expect(useAppStore.getState().files).toEqual([
+        {
+          path: "C:\\photos\\sub\\a.png",
           name: "a.png",
           size: 0,
           status: "pending",
