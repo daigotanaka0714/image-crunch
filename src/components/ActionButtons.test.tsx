@@ -37,7 +37,8 @@ const unlisteners = new Map<string, ReturnType<typeof vi.fn>>();
 
 // invoke("process_batch") は「まだ終わっていない Promise」を返す。
 // これで処理中の見た目と、成功／失敗それぞれの後始末を検査できる。
-let finishInvoke: () => void = () => {};
+// Rust 側の process_batch は BatchStats を返すので、解決値もそれに合わせる。
+let finishInvoke: (stats?: BatchStats) => void = () => {};
 let failInvoke: (reason: unknown) => void = () => {};
 
 function makeFile(path: string, overrides: Partial<FileItem> = {}): FileItem {
@@ -141,8 +142,8 @@ beforeEach(async () => {
 
   vi.mocked(invoke).mockImplementation(
     () =>
-      new Promise<never>((resolve, reject) => {
-        finishInvoke = () => resolve(undefined as never);
+      new Promise((resolve, reject) => {
+        finishInvoke = (stats = makeStats()) => resolve(stats);
         failInvoke = reject;
       }),
   );
@@ -574,20 +575,88 @@ describe("ActionButtons", () => {
       expect(useAppStore.getState().progress).toBeNull();
     });
 
-    it("完了イベントが来ないまま process_batch が終わると処理中の表示が残る", async () => {
+    it("完了イベントが来なくても process_batch が終われば処理中から抜ける", async () => {
+      setReady();
+      await start();
+
+      // Rust 側の emit は `let _ = app.emit(...)` で失敗を握り潰すので、
+      // 完了イベントが届かないまま process_batch だけが正常終了しうる。
+      // このとき戻り値で完了させないと processing のまま開始ボタンが死ぬ。
+      const stats = makeStats({ successful_files: 3, total_files: 3 });
+      await act(async () => {
+        finishInvoke(stats);
+      });
+
+      const state = useAppStore.getState();
+      expect(state.processingState).toBe("completed");
+      expect(state.batchStats).toEqual(stats);
+      expect(startButton()).toBeEnabled();
+      expect(
+        screen.queryByRole("button", { name: i18n.t("actions.cancel") }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("完了イベントが来なくても戻り値の統計で通知する", async () => {
       setReady();
       await start();
 
       await act(async () => {
-        finishInvoke();
+        finishInvoke(
+          makeStats({ successful_files: 8, overall_reduction_percent: 62.34 }),
+        );
       });
 
-      // 状態を completed に戻すのは processing-complete イベントだけなので、
-      // イベントが来なければ処理中のまま開始ボタンも押せない。
-      expect(useAppStore.getState().processingState).toBe("processing");
-      expect(
-        screen.getByRole("button", { name: i18n.t("actions.processing") }),
-      ).toBeDisabled();
+      await waitFor(() =>
+        expect(sendNotification).toHaveBeenCalledWith({
+          title: "Image Crunch",
+          body: "Converted 8 images (62.3% reduction)",
+        }),
+      );
+    });
+
+    it("完了イベントと戻り値の両方が届いても完了は 1 回だけ扱う", async () => {
+      setReady();
+      await start();
+
+      const fromEvent = makeStats({ successful_files: 3 });
+      await emit("processing-complete", fromEvent);
+      await act(async () => {
+        finishInvoke(makeStats({ successful_files: 99 }));
+      });
+
+      // 先に届いたイベントの統計を採用し、通知も二重に出さない。
+      expect(useAppStore.getState().batchStats).toEqual(fromEvent);
+      await waitFor(() => expect(sendNotification).toHaveBeenCalledTimes(1));
+    });
+
+    it("戻り値で完了したあとに完了イベントが来ても二重に扱わない", async () => {
+      setReady();
+      await start();
+
+      const fromReturn = makeStats({ successful_files: 3 });
+      await act(async () => {
+        finishInvoke(fromReturn);
+      });
+      // finally で購読は解除済みだが、解除前に届いた場合を想定して
+      // 掴んだハンドラを直接叩く。
+      await emit("processing-complete", makeStats({ successful_files: 99 }));
+
+      expect(useAppStore.getState().batchStats).toEqual(fromReturn);
+      await waitFor(() => expect(sendNotification).toHaveBeenCalledTimes(1));
+    });
+
+    it("process_batch が失敗したときは完了扱いにしない", async () => {
+      setReady();
+      await start();
+
+      await act(async () => {
+        failInvoke(new Error("boom"));
+      });
+
+      const state = useAppStore.getState();
+      expect(state.processingState).toBe("error");
+      expect(state.batchStats).toBeNull();
+      expect(sendNotification).not.toHaveBeenCalled();
     });
 
     it("2 回続けて実行しても購読が積み上がらない", async () => {

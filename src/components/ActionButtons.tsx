@@ -96,24 +96,36 @@ export function ActionButtons() {
       },
     );
 
+    // 完了の反映は 1 回だけ。processing-complete イベントと process_batch の
+    // 戻り値のどちらが先に届いても、先着だけを採用する。
+    let completionHandled = false;
+    const handleCompletion = (stats: BatchStats) => {
+      if (completionHandled) return;
+      completionHandled = true;
+      setBatchStats(stats);
+      setProcessingState("completed");
+      // Send desktop notification
+      sendCompletionNotification(stats);
+    };
+
     // Listen for completion
     const unlistenComplete = await listen<BatchStats>(
       "processing-complete",
       (event) => {
-        setBatchStats(event.payload);
-        setProcessingState("completed");
-        // Send desktop notification
-        sendCompletionNotification(event.payload);
+        handleCompletion(event.payload);
       },
     );
 
     try {
       const inputPaths = files.map((f) => f.path);
-      await invoke("process_batch", {
+      const stats = await invoke<BatchStats>("process_batch", {
         inputPaths,
         outputDir,
         options,
       });
+      // イベントが届かなくても戻り値で完了させる。これが無いと
+      // processing のまま抜けられず、開始ボタンが押せなくなる。
+      handleCompletion(stats);
     } catch (error) {
       console.error("Processing failed:", error);
       setError(`${t("errors.processingFailed")}: ${String(error)}`);
