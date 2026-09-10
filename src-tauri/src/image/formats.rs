@@ -56,21 +56,6 @@ impl OutputFormat {
             Self::WebP => "webp",
         }
     }
-
-    /// Get MIME type for this format
-    // 現状クレート内から呼ばれていないが、フォーマット定義の一部として残す。
-    // clippy -D warnings を通すために allow を明示する（黙って消さない）。
-    #[allow(dead_code)]
-    pub fn mime_type(&self) -> &'static str {
-        match self {
-            Self::Jpeg => "image/jpeg",
-            Self::Png => "image/png",
-            Self::Gif => "image/gif",
-            Self::Bmp => "image/bmp",
-            Self::Tiff => "image/tiff",
-            Self::WebP => "image/webp",
-        }
-    }
 }
 
 #[cfg(test)]
@@ -90,15 +75,5 @@ mod tests {
     fn test_output_format_extension() {
         assert_eq!(OutputFormat::Jpeg.extension(), "jpg");
         assert_eq!(OutputFormat::WebP.extension(), "webp");
-    }
-
-    #[test]
-    fn test_output_format_mime_type() {
-        assert_eq!(OutputFormat::Jpeg.mime_type(), "image/jpeg");
-        assert_eq!(OutputFormat::Png.mime_type(), "image/png");
-        assert_eq!(OutputFormat::Gif.mime_type(), "image/gif");
-        assert_eq!(OutputFormat::Bmp.mime_type(), "image/bmp");
-        assert_eq!(OutputFormat::Tiff.mime_type(), "image/tiff");
-        assert_eq!(OutputFormat::WebP.mime_type(), "image/webp");
     }
 }

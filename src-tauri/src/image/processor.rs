@@ -12,15 +12,6 @@ pub enum ProcessError {
     ReadError(String),
     #[error("Failed to write image: {0}")]
     WriteError(String),
-    // この2つは現状どこからも構築されていないが、エラーの分類として定義を残す。
-    // clippy -D warnings を通すために allow を明示する（黙って消さない）。
-    // 実際に投げる箇所ができたら allow を外すこと。
-    #[allow(dead_code)]
-    #[error("Unsupported format: {0}")]
-    UnsupportedFormat(String),
-    #[allow(dead_code)]
-    #[error("Processing failed: {0}")]
-    ProcessingFailed(String),
 }
 
 /// Compression type
@@ -218,14 +209,6 @@ mod tests {
         assert_eq!(
             ProcessError::WriteError("b.png".into()).to_string(),
             "Failed to write image: b.png"
-        );
-        assert_eq!(
-            ProcessError::UnsupportedFormat("svg".into()).to_string(),
-            "Unsupported format: svg"
-        );
-        assert_eq!(
-            ProcessError::ProcessingFailed("oom".into()).to_string(),
-            "Processing failed: oom"
         );
     }
 }

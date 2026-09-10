@@ -25,11 +25,11 @@ jobs:
           node-version: 20
 
       - name: Install pnpm
+        # バージョンはここに書かない。package.json の packageManager を唯一の
+        # 出どころにする（ローカルは corepack が同じ値を読む）。
+        # 以前はここに 9 を固定していたためローカルの 12 とずれ、
+        # pnpm 11 以降の pnpm-workspace.yaml (allowBuilds) を CI が解釈できずに落ちた。
         uses: pnpm/action-setup@v4
-        with:
-          # ローカルの pnpm は 12 系。pnpm 11 以降は pnpm-workspace.yaml の
-          # allowBuilds を読むため、CI も 12 に揃える（9 だと解釈できない）。
-          version: 12
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
