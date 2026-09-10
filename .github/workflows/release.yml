@@ -36,7 +36,9 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # ローカルの pnpm は 12 系。pnpm 11 以降は pnpm-workspace.yaml の
+          # allowBuilds を読むため、CI も 12 に揃える（9 だと解釈できない）。
+          version: 12
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
