@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useState } from "react";
@@ -69,8 +69,10 @@ export function DropZone() {
     let disposed = false;
 
     const setupDragDrop = async () => {
-      // Check if running in Tauri environment
-      if (typeof window === "undefined" || !("__TAURI__" in window)) {
+      // Tauri 環境かどうかは isTauri() で判定する。
+      // window.__TAURI__ は tauri.conf.json の app.withGlobalTauri が true のときしか
+      // 注入されないため、それで判定すると実機で購読が一切行われない。
+      if (!isTauri()) {
         console.warn(
           "Not running in Tauri environment, drag and drop disabled",
         );

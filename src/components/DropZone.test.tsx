@@ -12,7 +12,12 @@ const open = vi.hoisted(() => vi.fn());
 const onDragDropEvent = vi.hoisted(() => vi.fn());
 const unlisten = vi.hoisted(() => vi.fn());
 
-vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+// isTauri は本物を使う。環境判定までモックすると、実機に無い目印で
+// 判定していても気づけない（withGlobalTauri 前提の判定で実機の D&D が死んでいた）。
+vi.mock("@tauri-apps/api/core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@tauri-apps/api/core")>()),
+  invoke,
+}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open }));
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ onDragDropEvent }),
@@ -39,8 +44,14 @@ beforeEach(async () => {
   open.mockResolvedValue(null);
   onDragDropEvent.mockResolvedValue(unlisten);
 
-  // Tauri 環境だと判定させる（この目印が無いとリスナ登録自体が行われない）
-  (window as unknown as Record<string, unknown>).__TAURI__ = {};
+  // 実機の Tauri が webview に必ず注入するものだけを再現する
+  // （tauri の manager/webview.rs が window.isTauri と __TAURI_INTERNALS__ を定義する）。
+  // window.__TAURI__ は withGlobalTauri が有効なときしか入らず、
+  // このアプリでは無効なので、テストでも入れない。
+  const w = window as unknown as Record<string, unknown>;
+  w.isTauri = true;
+  w.__TAURI_INTERNALS__ = {};
+  Reflect.deleteProperty(window, "__TAURI__");
 
   // 失敗系のテストで console が汚れるので黙らせる
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -97,9 +108,21 @@ describe("DropZone", () => {
       expect(onDragDropEvent).toHaveBeenCalledTimes(1);
     });
 
+    it("window.__TAURI__ が無くても（withGlobalTauri 無効の実機と同じ状態）購読する", async () => {
+      // 回帰テスト: 以前は `"__TAURI__" in window` で判定していたため、
+      // withGlobalTauri を有効にしていない実機では購読されず D&D が無反応だった。
+      expect("__TAURI__" in window).toBe(false);
+
+      const { emit } = await renderDropZone();
+      expect(onDragDropEvent).toHaveBeenCalledTimes(1);
+
+      invoke.mockResolvedValue(["/images/a.png"]);
+      await emit({ type: "drop", paths: ["/images/a.png"] });
+      expect(filePaths()).toEqual(["/images/a.png"]);
+    });
+
     it("Tauri 環境でなければ購読せず、警告だけ出す", async () => {
-      // 実装は `"__TAURI__" in window` で判定するので、値を消す必要がある
-      Reflect.deleteProperty(window, "__TAURI__");
+      Reflect.deleteProperty(window, "isTauri");
 
       render(<DropZone />);
       await act(async () => {});
