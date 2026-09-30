@@ -18,6 +18,7 @@ export function ActionButtons() {
     options,
     outputDir,
     processingState,
+    progress,
     setProcessingState,
     setProgress,
     setBatchStats,
@@ -27,6 +28,11 @@ export function ActionButtons() {
   } = useAppStore();
 
   const isProcessing = processingState === "processing";
+  // 最初のファイルが終わるまでは progress が無いので、件数も塗りも出さない
+  const shownProgress = isProcessing ? progress : null;
+  const progressPercent = shownProgress
+    ? Math.min(100, Math.max(0, shownProgress.percent))
+    : 0;
   // ウォーターマークを有効にしたまま画像・文字・フォントが未指定だと、
   // 全ファイルが失敗するか何も描かれない
   const { watermark } = options;
@@ -209,21 +215,40 @@ export function ActionButtons() {
         onClick={handleStart}
         disabled={!canStart}
         className={`
-          flex-1 py-3.5 px-6 rounded-xl font-semibold text-white
+          relative overflow-hidden
+          flex-1 py-3.5 px-6 rounded-xl font-semibold
           flex items-center justify-center gap-2.5
           transition-all duration-200 ease-out
           ${
             canStart
-              ? "bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]"
-              : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+              ? "text-white bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 hover:scale-[1.02] active:scale-[0.98]"
+              : isProcessing
+                ? "text-indigo-700 bg-slate-200 cursor-not-allowed shadow-none"
+                : "text-white bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
           }
         `}
       >
+        {shownProgress && (
+          <span
+            aria-hidden="true"
+            data-testid="progress-fill"
+            className="absolute inset-y-0 left-0 bg-gradient-to-r from-indigo-400/50 to-violet-400/50 transition-[width] duration-300 ease-out"
+            style={{ width: `${progressPercent}%` }}
+          />
+        )}
         {isProcessing ? (
-          <>
+          <span className="relative flex items-center gap-2.5">
             <SpinnerIcon className="w-5 h-5 animate-spin" />
-            <span>{t("actions.processing")}</span>
-          </>
+            <span>
+              {shownProgress
+                ? t("actions.processingProgress", {
+                    current: shownProgress.current,
+                    total: shownProgress.total,
+                    percent: Math.floor(progressPercent),
+                  })
+                : t("actions.processing")}
+            </span>
+          </span>
         ) : (
           <>
             <PlayIcon className="w-5 h-5" />

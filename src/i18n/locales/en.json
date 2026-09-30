@@ -87,7 +87,8 @@
   "actions": {
     "start": "Start Conversion",
     "cancel": "Cancel",
-    "processing": "Processing..."
+    "processing": "Processing...",
+    "processingProgress": "Processing... {{current}} / {{total}} ({{percent}}%)"
   },
   "errors": {
     "noFiles": "Please add files to process",

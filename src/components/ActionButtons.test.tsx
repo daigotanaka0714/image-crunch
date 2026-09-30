@@ -275,6 +275,71 @@ describe("ActionButtons", () => {
       ).not.toBeInTheDocument();
     });
 
+    it("最初の進捗が届くまでは件数も塗りも出さない", () => {
+      setReady();
+      useAppStore.setState({ processingState: "processing", progress: null });
+      render(<ActionButtons />);
+
+      expect(
+        screen.getByRole("button", { name: "Processing..." }),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("progress-fill")).not.toBeInTheDocument();
+    });
+
+    it("処理中はボタンに件数と % を出し、背景を % の分だけ塗る", async () => {
+      setReady([makeFile("/photos/a.png"), makeFile("/photos/b.png")]);
+      await start();
+
+      await emit(
+        "processing-progress",
+        makeProgress({ current: 1, total: 3, percent: 33.3333 }),
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Processing... 1 / 3 (33%)" }),
+      ).toBeDisabled();
+      expect(screen.getByTestId("progress-fill")).toHaveStyle({
+        width: "33.3333%",
+      });
+
+      await emit(
+        "processing-progress",
+        makeProgress({ current: 3, total: 3, percent: 100 }),
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Processing... 3 / 3 (100%)" }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("progress-fill")).toHaveStyle({
+        width: "100%",
+      });
+    });
+
+    it("日本語でも件数と % を出す", async () => {
+      await i18n.changeLanguage("ja");
+      setReady();
+      useAppStore.setState({
+        processingState: "processing",
+        progress: makeProgress({ current: 2, total: 4, percent: 50 }),
+      });
+      render(<ActionButtons />);
+
+      expect(
+        screen.getByRole("button", { name: "処理中... 2 / 4（50%）" }),
+      ).toBeInTheDocument();
+    });
+
+    it("処理が終わると塗りは消える", async () => {
+      setReady();
+      await start();
+      await emit("processing-progress", makeProgress());
+
+      await emit("processing-complete", makeStats());
+
+      expect(screen.queryByTestId("progress-fill")).not.toBeInTheDocument();
+      expect(startButton()).toBeEnabled();
+    });
+
     it("無効なときに押しても処理は始まらない", async () => {
       const user = userEvent.setup();
       render(<ActionButtons />);

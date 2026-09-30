@@ -87,7 +87,8 @@
   "actions": {
     "start": "変換開始",
     "cancel": "キャンセル",
-    "processing": "処理中..."
+    "processing": "処理中...",
+    "processingProgress": "処理中... {{current}} / {{total}}（{{percent}}%）"
   },
   "errors": {
     "noFiles": "処理するファイルを追加してください",
