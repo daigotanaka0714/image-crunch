@@ -649,6 +649,14 @@ describe("SettingsPanel", () => {
         expect(currentOptions().watermark).toMatchObject({
           color: "#ff8800",
         });
+        expect(screen.getByText("#ff8800")).toBeInTheDocument();
+      });
+
+      it("既定の白でも色の欄が分かるよう、枠と値を出す", async () => {
+        await renderWithFonts({ watermark: textWatermark() });
+
+        expect(screen.getByLabelText("Color")).toHaveClass("border");
+        expect(screen.getByText("#ffffff")).toBeInTheDocument();
       });
 
       it("縁取りは任意で、色と太さ（1〜20%）を指定できる", async () => {

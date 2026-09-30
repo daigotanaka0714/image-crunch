@@ -30,6 +30,10 @@ const OUTPUT_FORMATS: OutputFormat[] = [
 
 const WATERMARK_KINDS: WatermarkKind[] = ["text", "image"];
 
+// The border keeps a white swatch visible on the white panel
+const COLOR_INPUT_CLASS =
+  "h-8 w-12 p-0.5 rounded-lg border border-slate-300 bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+
 const MAX_WATERMARK_MARGIN = WATERMARK_LIMITS.margin_percent.max;
 const MAX_OUTLINE_WIDTH = WATERMARK_LIMITS.outline_width_percent.max;
 
@@ -537,8 +541,11 @@ export function SettingsPanel() {
                       value={textWatermark.color}
                       onChange={(e) => updateText({ color: e.target.value })}
                       disabled={isProcessing}
-                      className="h-8 w-12 cursor-pointer disabled:opacity-50"
+                      className={COLOR_INPUT_CLASS}
                     />
+                    <span className="text-xs font-mono text-slate-500">
+                      {textWatermark.color}
+                    </span>
                   </div>
 
                   <div className="space-y-3">
@@ -576,8 +583,11 @@ export function SettingsPanel() {
                               })
                             }
                             disabled={isProcessing}
-                            className="h-8 w-12 cursor-pointer disabled:opacity-50"
+                            className={COLOR_INPUT_CLASS}
                           />
+                          <span className="text-xs font-mono text-slate-500">
+                            {textWatermark.outline.color}
+                          </span>
                         </div>
                         <div className="space-y-2">
                           <div className="flex justify-between items-center">
