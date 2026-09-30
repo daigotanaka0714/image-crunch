@@ -29,7 +29,8 @@ function basename(path: string): string {
 
 export function DropZone() {
   const { t } = useTranslation();
-  const { addFiles, processingState } = useAppStore();
+  const { addFiles, processingState, includeSubfolders, setIncludeSubfolders } =
+    useAppStore();
   const [isDropped, setIsDropped] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
 
@@ -38,8 +39,11 @@ export function DropZone() {
       if (processingState === "processing") return;
 
       try {
-        // Get all image files (including from directories)
-        const imagePaths = await invoke<string[]>("get_image_files", { paths });
+        // Get the image files, expanding folders
+        const imagePaths = await invoke<string[]>("get_image_files", {
+          paths,
+          includeSubfolders,
+        });
 
         const fileItems: FileItem[] = imagePaths.map((path) => ({
           path,
@@ -57,7 +61,7 @@ export function DropZone() {
         console.error("Failed to process dropped files:", error);
       }
     },
-    [addFiles, processingState],
+    [addFiles, processingState, includeSubfolders],
   );
 
   // Set up Tauri drag and drop event listener
@@ -252,6 +256,20 @@ export function DropZone() {
             {t("dropzone.selectFolder")}
           </button>
         </div>
+
+        {/* Applies when a folder is added, not to files already listed */}
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeSubfolders}
+            onChange={(e) => setIncludeSubfolders(e.target.checked)}
+            disabled={isProcessing}
+            className="custom-checkbox"
+          />
+          <span className="text-sm text-slate-600">
+            {t("dropzone.includeSubfolders")}
+          </span>
+        </label>
       </div>
     </div>
   );

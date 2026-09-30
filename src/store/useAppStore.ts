@@ -8,6 +8,10 @@ import type {
   ProgressUpdate,
 } from "../types";
 import {
+  loadIncludeSubfolders,
+  saveIncludeSubfolders,
+} from "./includeSubfolders";
+import {
   initialWatermark,
   loadSavedWatermark,
   saveWatermarkSettings,
@@ -34,6 +38,10 @@ interface AppState {
   // Output directory
   outputDir: string;
   setOutputDir: (dir: string) => void;
+
+  // Whether adding a folder also adds the images in its subfolders
+  includeSubfolders: boolean;
+  setIncludeSubfolders: (include: boolean) => void;
 
   // Processing state
   processingState: ProcessingState;
@@ -112,6 +120,9 @@ export const useAppStore = create<AppState>((set) => ({
   outputDir: "",
   setOutputDir: (dir) => set({ outputDir: dir }),
 
+  includeSubfolders: loadIncludeSubfolders(),
+  setIncludeSubfolders: (includeSubfolders) => set({ includeSubfolders }),
+
   // Processing state
   processingState: "idle",
   setProcessingState: (processingState) => set({ processingState }),
@@ -145,5 +156,11 @@ useAppStore.subscribe((state, previous) => {
     saveWatermarkSettings(
       toSaved(state.options.watermark, loadSavedWatermark()),
     );
+  }
+});
+
+useAppStore.subscribe((state, previous) => {
+  if (state.includeSubfolders !== previous.includeSubfolders) {
+    saveIncludeSubfolders(state.includeSubfolders);
   }
 });
