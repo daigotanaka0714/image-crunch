@@ -27,8 +27,14 @@ export function ActionButtons() {
   } = useAppStore();
 
   const isProcessing = processingState === "processing";
-  // ウォーターマークを有効にしたまま画像が未指定だと、全ファイルが失敗する
-  const watermarkReady = options.watermark === null || !!options.watermark.path;
+  // ウォーターマークを有効にしたまま画像・文字・フォントが未指定だと、
+  // 全ファイルが失敗するか何も描かれない
+  const { watermark } = options;
+  const watermarkReady =
+    watermark === null ||
+    (watermark.kind === "image"
+      ? !!watermark.path
+      : !!watermark.text.trim() && !!watermark.font);
   const canStart =
     files.length > 0 && outputDir && watermarkReady && !isProcessing;
 

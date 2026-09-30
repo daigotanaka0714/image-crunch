@@ -4,6 +4,7 @@ use std::path::Path;
 use thiserror::Error;
 
 use super::formats::OutputFormat;
+use super::text::{self, TextStyle};
 
 /// Image processing errors
 #[derive(Error, Debug)]
@@ -14,6 +15,8 @@ pub enum ProcessError {
     WriteError(String),
     #[error("Failed to read watermark image: {0}")]
     Watermark(String),
+    #[error("Failed to draw text watermark: {0}")]
+    TextWatermark(String),
 }
 
 /// Anchor of the watermark on a 3x3 grid
@@ -46,6 +49,44 @@ pub struct ImageWatermark {
     pub scale_percent: f32,
 }
 
+/// Outline around the watermark text
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextOutline {
+    /// `#rrggbb`
+    pub color: String,
+    /// Outline width, as a percentage of the font size (1-20)
+    pub width_percent: f32,
+}
+
+/// Text watermark drawn once over the output image
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextWatermark {
+    /// Text drawn on one line
+    pub text: String,
+    /// PostScript name of a system font
+    pub font: String,
+    /// `#rrggbb`
+    pub color: String,
+    /// Outline (None = no outline)
+    pub outline: Option<TextOutline>,
+    /// Anchor on the 3x3 grid
+    pub position: WatermarkPosition,
+    /// Distance from the edges, as a percentage of the output width (0-50)
+    pub margin_percent: f32,
+    /// Opacity (0-100)
+    pub opacity: u8,
+    /// Text width, as a percentage of the output width (1-100)
+    pub scale_percent: f32,
+}
+
+/// Watermark drawn over the output image: text or an image, never both
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Watermark {
+    Image(ImageWatermark),
+    Text(TextWatermark),
+}
+
 /// Compression type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -69,8 +110,8 @@ pub struct ProcessingOptions {
     pub keep_metadata: bool,
     /// Compression type
     pub compression: CompressionType,
-    /// Image watermark (None = off)
-    pub watermark: Option<ImageWatermark>,
+    /// Watermark (None = off)
+    pub watermark: Option<Watermark>,
 }
 
 impl Default for ProcessingOptions {
@@ -135,7 +176,8 @@ impl ImageProcessor {
 
         // Apply watermark if specified
         let img = match &options.watermark {
-            Some(watermark) => Self::apply_watermark(img, watermark)?,
+            Some(Watermark::Image(watermark)) => Self::apply_watermark(img, watermark)?,
+            Some(Watermark::Text(watermark)) => Self::apply_text_watermark(img, watermark)?,
             None => img,
         };
 
@@ -201,9 +243,6 @@ impl ImageProcessor {
 
     /// Scale `mark` to the output width, apply opacity and alpha-blend it at
     /// the chosen position.
-    ///
-    /// Blending is done in RGBA8. An image without alpha is converted back to
-    /// RGB8 afterwards, so opaque inputs stay opaque in every output format.
     fn composite_watermark(
         img: DynamicImage,
         mark: &RgbaImage,
@@ -219,30 +258,88 @@ impl ImageProcessor {
         let mark_height = ((mark.height() as f64 * mark_width as f64 / mark.width() as f64).round()
             as u32)
             .max(1);
-        let mut mark = image::imageops::resize(
+        let mark = image::imageops::resize(
             mark,
             mark_width,
             mark_height,
             image::imageops::FilterType::Lanczos3,
         );
 
-        let opacity = watermark.opacity.min(100) as u16;
+        Self::overlay_mark(
+            img,
+            mark,
+            watermark.position,
+            watermark.margin_percent,
+            watermark.opacity,
+        )
+    }
+
+    /// Render the text at its percentage of the output width and draw it over
+    /// the image
+    fn apply_text_watermark(
+        img: DynamicImage,
+        watermark: &TextWatermark,
+    ) -> Result<DynamicImage, ProcessError> {
+        let fill = text::parse_hex_color(&watermark.color).map_err(ProcessError::TextWatermark)?;
+        let outline = match &watermark.outline {
+            Some(outline) => Some((
+                text::parse_hex_color(&outline.color).map_err(ProcessError::TextWatermark)?,
+                outline.width_percent.clamp(1.0, 20.0) / 100.0,
+            )),
+            None => None,
+        };
+        let scale = watermark.scale_percent.clamp(1.0, 100.0) as f64 / 100.0;
+        let target_width = ((img.width() as f64 * scale).round() as u32).max(1);
+        let style = TextStyle {
+            text: &watermark.text,
+            fill,
+            outline,
+        };
+
+        let mark = text::render_text(&watermark.font, &style, target_width)
+            .map_err(ProcessError::TextWatermark)?;
+        Ok(match mark {
+            Some(mark) if img.width() > 0 && img.height() > 0 => Self::overlay_mark(
+                img,
+                mark,
+                watermark.position,
+                watermark.margin_percent,
+                watermark.opacity,
+            ),
+            _ => img,
+        })
+    }
+
+    /// Apply opacity to `mark` and alpha-blend it at `position`, `margin_percent`
+    /// of the output width away from the edges.
+    ///
+    /// Blending is done in RGBA8. An image without alpha is converted back to
+    /// RGB8 afterwards, so opaque inputs stay opaque in every output format.
+    fn overlay_mark(
+        img: DynamicImage,
+        mut mark: RgbaImage,
+        position: WatermarkPosition,
+        margin_percent: f32,
+        opacity: u8,
+    ) -> DynamicImage {
+        let (width, height) = (img.width(), img.height());
+
+        let opacity = opacity.min(100) as u16;
         for pixel in mark.pixels_mut() {
             pixel[3] = (pixel[3] as u16 * opacity / 100) as u8;
         }
 
-        let margin = (width as f64 * watermark.margin_percent.clamp(0.0, 50.0) as f64 / 100.0)
-            .round() as i64;
-        let free_x = width as i64 - mark_width as i64;
-        let free_y = height as i64 - mark_height as i64;
+        let margin = (width as f64 * margin_percent.clamp(0.0, 50.0) as f64 / 100.0).round() as i64;
+        let free_x = width as i64 - mark.width() as i64;
+        let free_y = height as i64 - mark.height() as i64;
         let (x, y) = {
             use WatermarkPosition::*;
-            let x = match watermark.position {
+            let x = match position {
                 TopLeft | MiddleLeft | BottomLeft => margin,
                 TopCenter | Center | BottomCenter => free_x / 2,
                 TopRight | MiddleRight | BottomRight => free_x - margin,
             };
-            let y = match watermark.position {
+            let y = match position {
                 TopLeft | TopCenter | TopRight => margin,
                 MiddleLeft | Center | MiddleRight => free_y / 2,
                 BottomLeft | BottomCenter | BottomRight => free_y - margin,
@@ -370,6 +467,7 @@ mod tests {
                 "format": "png", "quality": 80, "width": null, "height": null,
                 "keep_metadata": false, "compression": "lossy",
                 "watermark": {
+                    "kind": "image",
                     "path": "/tmp/logo.png", "position": "bottom_right",
                     "margin_percent": 2, "opacity": 50, "scale_percent": 20
                 }
@@ -377,9 +475,53 @@ mod tests {
         )
         .unwrap();
 
-        let watermark = options.watermark.unwrap();
+        let Some(Watermark::Image(watermark)) = options.watermark else {
+            panic!("expected an image watermark");
+        };
         assert_eq!(watermark.position, WatermarkPosition::BottomRight);
         assert_eq!(watermark.opacity, 50);
+    }
+
+    #[test]
+    fn text_watermark_deserializes_from_frontend_shape() {
+        let options: ProcessingOptions = serde_json::from_str(
+            r##"{
+                "format": "png", "quality": 80, "width": null, "height": null,
+                "keep_metadata": false, "compression": "lossy",
+                "watermark": {
+                    "kind": "text",
+                    "text": "© Example", "font": "HiraginoSans-W3", "color": "#ffffff",
+                    "outline": { "color": "#000000", "width_percent": 5 },
+                    "position": "top_left",
+                    "margin_percent": 2, "opacity": 50, "scale_percent": 20
+                }
+            }"##,
+        )
+        .unwrap();
+
+        let Some(Watermark::Text(watermark)) = options.watermark else {
+            panic!("expected a text watermark");
+        };
+        assert_eq!(watermark.text, "© Example");
+        assert_eq!(watermark.font, "HiraginoSans-W3");
+        assert_eq!(watermark.position, WatermarkPosition::TopLeft);
+        assert_eq!(watermark.outline.unwrap().width_percent, 5.0);
+    }
+
+    #[test]
+    fn watermark_without_kind_is_rejected() {
+        let result = serde_json::from_str::<ProcessingOptions>(
+            r#"{
+                "format": "png", "quality": 80, "width": null, "height": null,
+                "keep_metadata": false, "compression": "lossy",
+                "watermark": {
+                    "path": "/tmp/logo.png", "position": "bottom_right",
+                    "margin_percent": 2, "opacity": 50, "scale_percent": 20
+                }
+            }"#,
+        );
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -542,13 +684,13 @@ mod tests {
                 format,
                 quality: 90,
                 width: Some(64),
-                watermark: Some(ImageWatermark {
+                watermark: Some(Watermark::Image(ImageWatermark {
                     path: mark_path.to_string_lossy().to_string(),
                     position: WatermarkPosition::BottomRight,
                     margin_percent: 0.0,
                     opacity: 100,
                     scale_percent: 50.0,
-                }),
+                })),
                 ..ProcessingOptions::default()
             };
 
@@ -585,10 +727,10 @@ mod tests {
         let output = dir.join("out.png");
         let options = ProcessingOptions {
             format: OutputFormat::Png,
-            watermark: Some(ImageWatermark {
+            watermark: Some(Watermark::Image(ImageWatermark {
                 path: dir.join("nope.png").to_string_lossy().to_string(),
                 ..watermark(WatermarkPosition::Center)
-            }),
+            })),
             ..ProcessingOptions::default()
         };
 
@@ -596,6 +738,210 @@ mod tests {
 
         assert!(matches!(err, ProcessError::Watermark(_)), "{}", err);
         assert!(!output.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn text_watermark(position: WatermarkPosition) -> TextWatermark {
+        TextWatermark {
+            text: "WM".into(),
+            font: text::font_list()
+                .default_font
+                .clone()
+                .expect("no usable system font"),
+            color: "#ff0000".into(),
+            outline: None,
+            position,
+            margin_percent: 0.0,
+            opacity: 100,
+            scale_percent: 50.0,
+        }
+    }
+
+    /// Bounding box (left, top, right, bottom) of the pixels that differ from
+    /// `background` by more than `tolerance`
+    fn changed_region(
+        img: &DynamicImage,
+        background: [u8; 3],
+        tolerance: u8,
+    ) -> Option<(u32, u32, u32, u32)> {
+        img.to_rgb8()
+            .enumerate_pixels()
+            .filter(|(_, _, pixel)| !close(pixel.0, background, tolerance))
+            .fold(None, |region, (x, y, _)| {
+                Some(match region {
+                    None => (x, y, x, y),
+                    Some((l, t, r, b)) => (l.min(x), t.min(y), r.max(x), b.max(y)),
+                })
+            })
+    }
+
+    #[test]
+    fn text_watermark_width_is_a_percentage_of_the_output_width() {
+        let out = ImageProcessor::apply_text_watermark(
+            blue_base(400, 200),
+            &text_watermark(WatermarkPosition::Center),
+        )
+        .unwrap();
+
+        let (left, _, right, _) = changed_region(&out, BLUE.0, 0).unwrap();
+        let drawn = right - left + 1;
+        assert!(drawn.abs_diff(200) <= 4, "drawn width {}", drawn);
+        assert!(!out.color().has_alpha());
+    }
+
+    #[test]
+    fn text_watermark_is_placed_on_the_3x3_grid_with_margin() {
+        // 400x300 base, margin 5% of width = 20px
+        for position in [
+            WatermarkPosition::TopLeft,
+            WatermarkPosition::Center,
+            WatermarkPosition::BottomRight,
+        ] {
+            let settings = TextWatermark {
+                margin_percent: 5.0,
+                scale_percent: 25.0,
+                ..text_watermark(position)
+            };
+            let out = ImageProcessor::apply_text_watermark(blue_base(400, 300), &settings).unwrap();
+            let (left, top, right, bottom) = changed_region(&out, BLUE.0, 0).unwrap();
+
+            match position {
+                WatermarkPosition::TopLeft => {
+                    assert!(left.abs_diff(20) <= 1, "left {}", left);
+                    assert!(top.abs_diff(20) <= 1, "top {}", top);
+                }
+                WatermarkPosition::BottomRight => {
+                    assert!(right.abs_diff(379) <= 1, "right {}", right);
+                    assert!(bottom.abs_diff(279) <= 1, "bottom {}", bottom);
+                }
+                _ => {
+                    assert!(((left + right) / 2).abs_diff(200) <= 2);
+                    assert!(((top + bottom) / 2).abs_diff(150) <= 2);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn text_watermark_color_and_opacity_are_applied() {
+        let opaque = ImageProcessor::apply_text_watermark(
+            blue_base(200, 100),
+            &text_watermark(WatermarkPosition::Center),
+        )
+        .unwrap()
+        .to_rgb8();
+        assert!(opaque.pixels().any(|p| p.0 == [255, 0, 0]));
+
+        let settings = TextWatermark {
+            opacity: 50,
+            ..text_watermark(WatermarkPosition::Center)
+        };
+        let faded = ImageProcessor::apply_text_watermark(blue_base(200, 100), &settings)
+            .unwrap()
+            .to_rgb8();
+        assert!(!faded.pixels().any(|p| p.0 == [255, 0, 0]));
+        assert!(faded
+            .pixels()
+            .any(|p| (126..=129).contains(&p[0]) && p[1] == 0 && (126..=129).contains(&p[2])));
+    }
+
+    #[test]
+    fn text_watermark_outline_uses_the_outline_color() {
+        let settings = TextWatermark {
+            outline: Some(TextOutline {
+                color: "#00ff00".into(),
+                width_percent: 10.0,
+            }),
+            ..text_watermark(WatermarkPosition::Center)
+        };
+        let out = ImageProcessor::apply_text_watermark(blue_base(200, 100), &settings)
+            .unwrap()
+            .to_rgb8();
+
+        assert!(out.pixels().any(|p| p.0 == [255, 0, 0]));
+        assert!(out.pixels().any(|p| p.0 == [0, 255, 0]));
+    }
+
+    #[test]
+    fn blank_text_leaves_the_image_unchanged() {
+        let settings = TextWatermark {
+            text: "  ".into(),
+            ..text_watermark(WatermarkPosition::Center)
+        };
+        let out = ImageProcessor::apply_text_watermark(blue_base(20, 20), &settings).unwrap();
+
+        assert!(changed_region(&out, BLUE.0, 0).is_none());
+    }
+
+    #[test]
+    fn invalid_text_watermark_settings_fail_the_image() {
+        let dir = scratch_dir("bad-text");
+        let input = dir.join("input.png");
+        RgbImage::from_pixel(8, 8, BLUE).save(&input).unwrap();
+        let output = dir.join("out.png");
+
+        for settings in [
+            TextWatermark {
+                font: "No-Such-Font-Anywhere".into(),
+                ..text_watermark(WatermarkPosition::Center)
+            },
+            TextWatermark {
+                color: "red".into(),
+                ..text_watermark(WatermarkPosition::Center)
+            },
+        ] {
+            let options = ProcessingOptions {
+                format: OutputFormat::Png,
+                watermark: Some(Watermark::Text(settings)),
+                ..ProcessingOptions::default()
+            };
+
+            let err = ImageProcessor::process_image(&input, &output, &options).unwrap_err();
+
+            assert!(matches!(err, ProcessError::TextWatermark(_)), "{}", err);
+            assert!(!output.exists());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn text_watermark_is_applied_in_every_output_format() {
+        let dir = scratch_dir("text-all-formats");
+        let input = dir.join("input.png");
+        RgbImage::from_pixel(256, 128, BLUE).save(&input).unwrap();
+
+        for format in [
+            OutputFormat::Jpeg,
+            OutputFormat::Png,
+            OutputFormat::Gif,
+            OutputFormat::Bmp,
+            OutputFormat::Tiff,
+            OutputFormat::WebP,
+        ] {
+            let output = dir.join(format!("out.{}", format.extension()));
+            let options = ProcessingOptions {
+                format,
+                quality: 90,
+                width: Some(128),
+                watermark: Some(Watermark::Text(text_watermark(
+                    WatermarkPosition::BottomRight,
+                ))),
+                ..ProcessingOptions::default()
+            };
+
+            ImageProcessor::process_image(&input, &output, &options)
+                .unwrap_or_else(|e| panic!("{:?}: {}", format, e));
+
+            // Resized to 128x64 first; the text fills the right half
+            let out = image::open(&output).unwrap();
+            assert_eq!((out.width(), out.height()), (128, 64), "{:?}", format);
+            let (left, _, right, bottom) = changed_region(&out, BLUE.0, 40)
+                .unwrap_or_else(|| panic!("{:?}: nothing drawn", format));
+            assert!(left >= 60, "{:?} left {}", format, left);
+            assert!(right >= 124, "{:?} right {}", format, right);
+            assert!(bottom >= 60, "{:?} bottom {}", format, bottom);
+        }
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,14 +1,23 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useMissingGlyphs, useSystemFonts } from "../hooks/useFonts";
 import { useAppStore } from "../store/useAppStore";
+import {
+  fromSaved,
+  loadSavedWatermark,
+  toSaved,
+  WATERMARK_LIMITS,
+  WATERMARK_POSITIONS,
+} from "../store/watermarkSettings";
 import type {
   CompressionType,
-  ImageWatermark,
   OutputFormat,
-  WatermarkPosition,
+  TextWatermark,
+  WatermarkKind,
+  WatermarkPlacement,
 } from "../types";
-import { FolderIcon, SettingsIcon } from "./Icons";
+import { FolderIcon, SettingsIcon, XIcon } from "./Icons";
 
 const OUTPUT_FORMATS: OutputFormat[] = [
   "webp",
@@ -19,28 +28,10 @@ const OUTPUT_FORMATS: OutputFormat[] = [
   "tiff",
 ];
 
-// Row-major order, so the radios render as a 3x3 grid
-const WATERMARK_POSITIONS: WatermarkPosition[] = [
-  "top_left",
-  "top_center",
-  "top_right",
-  "middle_left",
-  "center",
-  "middle_right",
-  "bottom_left",
-  "bottom_center",
-  "bottom_right",
-];
+const WATERMARK_KINDS: WatermarkKind[] = ["text", "image"];
 
-const DEFAULT_WATERMARK: ImageWatermark = {
-  path: "",
-  position: "bottom_right",
-  margin_percent: 2,
-  opacity: 50,
-  scale_percent: 20,
-};
-
-const MAX_WATERMARK_MARGIN = 20;
+const MAX_WATERMARK_MARGIN = WATERMARK_LIMITS.margin_percent.max;
+const MAX_OUTLINE_WIDTH = WATERMARK_LIMITS.outline_width_percent.max;
 
 // Fill the range track up to the current value
 const rangeBackground = (value: number, max: number, min = 0) => {
@@ -81,15 +72,48 @@ export function SettingsPanel() {
   };
 
   const { watermark } = options;
+  const textWatermark = watermark?.kind === "text" ? watermark : null;
+  const systemFonts = useSystemFonts();
+  const missingGlyphs = useMissingGlyphs(
+    textWatermark?.font ?? null,
+    textWatermark?.text ?? null,
+  );
 
   const handleWatermarkToggle = (enabled: boolean) => {
-    setOptions({ watermark: enabled ? DEFAULT_WATERMARK : null });
+    setOptions({ watermark: enabled ? fromSaved(loadSavedWatermark()) : null });
   };
 
-  const updateWatermark = (patch: Partial<ImageWatermark>) => {
+  // Placement and the saved text settings carry over; the image path does not
+  const handleKindChange = (kind: WatermarkKind) => {
+    if (watermark && watermark.kind !== kind) {
+      setOptions({
+        watermark: fromSaved(toSaved(watermark, loadSavedWatermark()), kind),
+      });
+    }
+  };
+
+  const updatePlacement = (patch: Partial<WatermarkPlacement>) => {
     if (watermark) {
       setOptions({ watermark: { ...watermark, ...patch } });
     }
+  };
+
+  const updateText = (patch: Partial<Omit<TextWatermark, "kind">>) => {
+    if (textWatermark) {
+      setOptions({ watermark: { ...textWatermark, ...patch } });
+    }
+  };
+
+  const handleOutlineToggle = (enabled: boolean) => {
+    const saved = loadSavedWatermark();
+    updateText({
+      outline: enabled
+        ? {
+            color: saved.outline_color,
+            width_percent: saved.outline_width_percent,
+          }
+        : null,
+    });
   };
 
   const handleSelectWatermark = async () => {
@@ -100,8 +124,12 @@ export function SettingsPanel() {
         filters: [{ name: "PNG", extensions: ["png"] }],
         title: t("settings.watermarkChoose"),
       });
-      if (selected && typeof selected === "string") {
-        updateWatermark({ path: selected });
+      if (
+        selected &&
+        typeof selected === "string" &&
+        watermark?.kind === "image"
+      ) {
+        setOptions({ watermark: { ...watermark, path: selected } });
       }
     } catch (error) {
       console.error("Failed to select watermark image:", error);
@@ -335,46 +363,264 @@ export function SettingsPanel() {
               {t("settings.watermarkEnable")}
             </span>
           </label>
+          {systemFonts.replacement && (
+            <div
+              role="status"
+              className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2 rounded-xl text-xs"
+            >
+              <span className="flex-1">
+                {t("settings.watermarkFontReplaced", {
+                  ...systemFonts.replacement,
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={systemFonts.dismissReplacement}
+                aria-label={t("settings.dismiss")}
+                className="p-0.5 hover:bg-amber-100 rounded"
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           {watermark && (
             <div className="space-y-4 animate-fadeIn">
-              <div className="space-y-1">
-                <label
-                  className="text-xs font-medium text-slate-500 block"
-                  htmlFor="settings-watermark-file"
-                >
-                  {t("settings.watermarkImage")}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    id="settings-watermark-file"
-                    type="text"
-                    value={watermark.path}
-                    disabled={isProcessing}
-                    className="flex-1 min-w-0 custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600 disabled:opacity-50"
-                    readOnly
-                    placeholder={t("settings.watermarkNoFile")}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSelectWatermark}
-                    disabled={isProcessing}
-                    className={`
+              <fieldset className="space-y-1">
+                <legend className="text-xs font-medium text-slate-500">
+                  {t("settings.watermarkKind")}
+                </legend>
+                <div className="flex gap-4">
+                  {WATERMARK_KINDS.map((kind) => (
+                    <label
+                      key={kind}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="watermark-kind"
+                        checked={watermark.kind === kind}
+                        onChange={() => handleKindChange(kind)}
+                        disabled={isProcessing}
+                        className="custom-radio"
+                      />
+                      <span className="text-sm text-slate-700">
+                        {t(
+                          kind === "text"
+                            ? "settings.watermarkKindText"
+                            : "settings.watermarkKindImage",
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              {watermark.kind === "image" && (
+                <div className="space-y-1">
+                  <label
+                    className="text-xs font-medium text-slate-500 block"
+                    htmlFor="settings-watermark-file"
+                  >
+                    {t("settings.watermarkImage")}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="settings-watermark-file"
+                      type="text"
+                      value={watermark.path}
+                      disabled={isProcessing}
+                      className="flex-1 min-w-0 custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600 disabled:opacity-50"
+                      readOnly
+                      placeholder={t("settings.watermarkNoFile")}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSelectWatermark}
+                      disabled={isProcessing}
+                      className={`
                       px-3 py-2
                       bg-slate-100 hover:bg-slate-200 border border-slate-200
                       rounded-xl text-sm font-medium text-slate-700
                       transition-all duration-200
                       ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}
                     `}
-                  >
-                    {t("settings.watermarkChoose")}
-                  </button>
+                    >
+                      {t("settings.watermarkChoose")}
+                    </button>
+                  </div>
+                  {!watermark.path && (
+                    <p className="text-xs text-amber-600">
+                      {t("settings.watermarkRequired")}
+                    </p>
+                  )}
                 </div>
-                {!watermark.path && (
-                  <p className="text-xs text-amber-600">
-                    {t("settings.watermarkRequired")}
-                  </p>
-                )}
-              </div>
+              )}
+
+              {textWatermark && (
+                <>
+                  <div className="space-y-1">
+                    <label
+                      className="text-xs font-medium text-slate-500 block"
+                      htmlFor="settings-watermark-text"
+                    >
+                      {t("settings.watermarkText")}
+                    </label>
+                    <input
+                      id="settings-watermark-text"
+                      type="text"
+                      value={textWatermark.text}
+                      onChange={(e) => updateText({ text: e.target.value })}
+                      disabled={isProcessing}
+                      className="w-full custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                    />
+                    {!textWatermark.text.trim() && (
+                      <p className="text-xs text-amber-600">
+                        {t("settings.watermarkTextRequired")}
+                      </p>
+                    )}
+                    {missingGlyphs.length > 0 && (
+                      <p className="text-xs text-amber-600" role="alert">
+                        {t("settings.watermarkMissingGlyphs", {
+                          chars: missingGlyphs.join(" "),
+                        })}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label
+                      className="text-xs font-medium text-slate-500 block"
+                      htmlFor="settings-watermark-font"
+                    >
+                      {t("settings.watermarkFont")}
+                    </label>
+                    <select
+                      id="settings-watermark-font"
+                      value={textWatermark.font}
+                      onChange={(e) => updateText({ font: e.target.value })}
+                      disabled={isProcessing || systemFonts.fonts === null}
+                      className="w-full custom-select bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 disabled:opacity-50"
+                    >
+                      {systemFonts.fonts === null ? (
+                        <option value={textWatermark.font}>
+                          {systemFonts.failed
+                            ? textWatermark.font
+                            : t("settings.watermarkFontsLoading")}
+                        </option>
+                      ) : (
+                        systemFonts.fonts.map((font) => (
+                          <option key={font.id} value={font.id}>
+                            {font.family === font.id
+                              ? font.id
+                              : `${font.family} (${font.id})`}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {systemFonts.failed && (
+                      <p className="text-xs text-rose-600">
+                        {t("settings.watermarkFontsError")}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <label
+                      className="text-xs font-medium text-slate-500"
+                      htmlFor="settings-watermark-color"
+                    >
+                      {t("settings.watermarkColor")}
+                    </label>
+                    <input
+                      id="settings-watermark-color"
+                      type="color"
+                      value={textWatermark.color}
+                      onChange={(e) => updateText({ color: e.target.value })}
+                      disabled={isProcessing}
+                      className="h-8 w-12 cursor-pointer disabled:opacity-50"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={textWatermark.outline !== null}
+                        onChange={(e) => handleOutlineToggle(e.target.checked)}
+                        disabled={isProcessing}
+                        className="custom-checkbox"
+                      />
+                      <span className="text-xs font-medium text-slate-500">
+                        {t("settings.watermarkOutline")}
+                      </span>
+                    </label>
+                    {textWatermark.outline && (
+                      <div className="space-y-3 animate-fadeIn">
+                        <div className="flex items-center gap-3">
+                          <label
+                            className="text-xs font-medium text-slate-500"
+                            htmlFor="settings-watermark-outline-color"
+                          >
+                            {t("settings.watermarkOutlineColor")}
+                          </label>
+                          <input
+                            id="settings-watermark-outline-color"
+                            type="color"
+                            value={textWatermark.outline.color}
+                            onChange={(e) =>
+                              updateText({
+                                outline: textWatermark.outline && {
+                                  ...textWatermark.outline,
+                                  color: e.target.value,
+                                },
+                              })
+                            }
+                            disabled={isProcessing}
+                            className="h-8 w-12 cursor-pointer disabled:opacity-50"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <label
+                              className="text-xs font-medium text-slate-500"
+                              htmlFor="settings-watermark-outline-width"
+                            >
+                              {t("settings.watermarkOutlineWidth")}
+                            </label>
+                            <span className="text-xs font-bold text-indigo-600">
+                              {textWatermark.outline.width_percent}%
+                            </span>
+                          </div>
+                          <input
+                            id="settings-watermark-outline-width"
+                            type="range"
+                            min="1"
+                            max={MAX_OUTLINE_WIDTH}
+                            value={textWatermark.outline.width_percent}
+                            onChange={(e) =>
+                              updateText({
+                                outline: textWatermark.outline && {
+                                  ...textWatermark.outline,
+                                  width_percent: parseInt(e.target.value, 10),
+                                },
+                              })
+                            }
+                            disabled={isProcessing}
+                            className="w-full disabled:opacity-50"
+                            style={{
+                              background: rangeBackground(
+                                textWatermark.outline.width_percent,
+                                MAX_OUTLINE_WIDTH,
+                                1,
+                              ),
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
               <fieldset className="space-y-1">
                 <legend className="text-xs font-medium text-slate-500">
@@ -394,7 +640,7 @@ export function SettingsPanel() {
                           `settings.watermarkPositions.${position}`,
                         )}
                         checked={watermark.position === position}
-                        onChange={() => updateWatermark({ position })}
+                        onChange={() => updatePlacement({ position })}
                         disabled={isProcessing}
                         className="custom-radio"
                       />
@@ -422,7 +668,7 @@ export function SettingsPanel() {
                   max="100"
                   value={watermark.scale_percent}
                   onChange={(e) =>
-                    updateWatermark({
+                    updatePlacement({
                       scale_percent: parseInt(e.target.value, 10),
                     })
                   }
@@ -453,7 +699,7 @@ export function SettingsPanel() {
                   max="100"
                   value={watermark.opacity}
                   onChange={(e) =>
-                    updateWatermark({ opacity: parseInt(e.target.value, 10) })
+                    updatePlacement({ opacity: parseInt(e.target.value, 10) })
                   }
                   disabled={isProcessing}
                   className="w-full disabled:opacity-50"
@@ -482,7 +728,7 @@ export function SettingsPanel() {
                   max={MAX_WATERMARK_MARGIN}
                   value={watermark.margin_percent}
                   onChange={(e) =>
-                    updateWatermark({
+                    updatePlacement({
                       margin_percent: parseInt(e.target.value, 10),
                     })
                   }

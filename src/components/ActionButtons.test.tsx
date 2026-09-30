@@ -199,6 +199,7 @@ describe("ActionButtons", () => {
       setReady();
       useAppStore.getState().setOptions({
         watermark: {
+          kind: "image",
           path: "",
           position: "bottom_right",
           margin_percent: 2,
@@ -215,6 +216,7 @@ describe("ActionButtons", () => {
       setReady();
       useAppStore.getState().setOptions({
         watermark: {
+          kind: "image",
           path: "/logo.png",
           position: "bottom_right",
           margin_percent: 2,
@@ -226,6 +228,38 @@ describe("ActionButtons", () => {
 
       expect(startButton()).toBeEnabled();
     });
+
+    it.each([
+      ["文字が空", "", "HiraginoSans-W3", false],
+      ["文字が空白だけ", "  ", "HiraginoSans-W3", false],
+      ["フォントが未確定", "© Example", "", false],
+      ["文字とフォントがそろっている", "© Example", "HiraginoSans-W3", true],
+    ])(
+      "文字ウォーターマークで%sなら enabled=%s",
+      (_label, text, font, enabled) => {
+        setReady();
+        useAppStore.getState().setOptions({
+          watermark: {
+            kind: "text",
+            text,
+            font,
+            color: "#ffffff",
+            outline: null,
+            position: "bottom_right",
+            margin_percent: 2,
+            opacity: 50,
+            scale_percent: 20,
+          },
+        });
+        render(<ActionButtons />);
+
+        if (enabled) {
+          expect(startButton()).toBeEnabled();
+        } else {
+          expect(startButton()).toBeDisabled();
+        }
+      },
+    );
 
     it("処理中は無効になり、ラベルが処理中の表示に変わる", () => {
       setReady();

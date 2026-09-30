@@ -2,6 +2,7 @@ mod commands;
 mod image;
 mod utils;
 
+use commands::font_commands;
 use commands::image_commands;
 use commands::update_commands;
 
@@ -17,6 +18,8 @@ pub fn run() {
             image_commands::process_single_image,
             image_commands::process_batch,
             image_commands::get_image_info,
+            font_commands::list_fonts,
+            font_commands::find_missing_glyphs,
             update_commands::check_for_updates,
             update_commands::get_current_version,
         ])

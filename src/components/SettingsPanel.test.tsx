@@ -1,17 +1,50 @@
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { useAppStore } from "../store/useAppStore";
-import type { ProcessingOptions } from "../types";
+import {
+  DEFAULT_SAVED_WATERMARK,
+  initialWatermark,
+  loadSavedWatermark,
+  WATERMARK_STORAGE_KEY,
+} from "../store/watermarkSettings";
+import type {
+  FontList,
+  ImageWatermark,
+  ProcessingOptions,
+  TextWatermark,
+} from "../types";
 import { SettingsPanel } from "./SettingsPanel";
 
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
 }));
 
 const openDialog = vi.mocked(open);
+const invokeMock = vi.mocked(invoke);
+
+const FONT_LIST: FontList = {
+  fonts: [
+    { id: "Helvetica", family: "Helvetica" },
+    { id: "HiraginoSans-W3", family: "Hiragino Sans" },
+  ],
+  default_font: "HiraginoSans-W3",
+};
+
+// Rust の list_fonts / find_missing_glyphs の代わり
+let fontList: FontList | Error = FONT_LIST;
+let missingGlyphs: string[] = [];
 
 // zustand の store はモジュール単位のシングルトンなので、
 // テストごとに初期状態へ戻す。
@@ -19,7 +52,19 @@ const initialState = useAppStore.getState();
 
 beforeEach(async () => {
   useAppStore.setState(initialState, true);
+  localStorage.clear();
   openDialog.mockReset();
+  fontList = FONT_LIST;
+  missingGlyphs = [];
+  invokeMock.mockReset();
+  invokeMock.mockImplementation(async (command) => {
+    if (command === "list_fonts") {
+      if (fontList instanceof Error) throw fontList;
+      return fontList;
+    }
+    if (command === "find_missing_glyphs") return missingGlyphs;
+    throw new Error(`unexpected command: ${command}`);
+  });
   await i18n.changeLanguage("en");
 });
 
@@ -297,43 +342,87 @@ describe("SettingsPanel", () => {
   });
 
   describe("ウォーターマーク", () => {
-    const enable = async (user: ReturnType<typeof userEvent.setup>) =>
-      user.click(screen.getByRole("checkbox", { name: "Add image watermark" }));
+    const imageWatermark = (
+      patch: Partial<ImageWatermark> = {},
+    ): ImageWatermark => ({
+      kind: "image",
+      path: "",
+      position: "center",
+      margin_percent: 2,
+      opacity: 50,
+      scale_percent: 20,
+      ...patch,
+    });
 
-    it("既定はオフで、詳細の欄は出ない", () => {
-      renderPanel();
+    const textWatermark = (
+      patch: Partial<TextWatermark> = {},
+    ): TextWatermark => ({
+      kind: "text",
+      text: "© Example",
+      font: "HiraginoSans-W3",
+      color: "#ffffff",
+      outline: null,
+      position: "center",
+      margin_percent: 2,
+      opacity: 50,
+      scale_percent: 20,
+      ...patch,
+    });
+
+    // list_fonts の結果が反映されるまで待つ
+    const renderWithFonts = async (
+      options: Partial<ProcessingOptions> = {},
+    ) => {
+      const view = renderPanel(options);
+      await act(async () => {});
+      return view;
+    };
+
+    const enable = async (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole("checkbox", { name: "Add watermark" }));
+
+    const chooseImageKind = async (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole("radio", { name: "Image" }));
+
+    it("既定はオフで、詳細の欄は出ない", async () => {
+      await renderWithFonts();
 
       expect(
-        screen.getByRole("checkbox", { name: "Add image watermark" }),
+        screen.getByRole("checkbox", { name: "Add watermark" }),
       ).not.toBeChecked();
       expect(currentOptions().watermark).toBeNull();
       expect(
-        screen.queryByRole("button", { name: "Choose PNG..." }),
+        screen.queryByRole("group", { name: "Type" }),
       ).not.toBeInTheDocument();
     });
 
-    it("有効にすると既定値が store に入り、画像は未指定のまま", async () => {
+    it("有効にすると文字が既定で、フォントは既定フォントになる", async () => {
       const user = userEvent.setup();
-      renderPanel();
+      await renderWithFonts();
 
       await enable(user);
 
       expect(currentOptions().watermark).toEqual({
-        path: "",
+        kind: "text",
+        text: "",
+        font: "HiraginoSans-W3",
+        color: "#ffffff",
+        outline: null,
         position: "bottom_right",
         margin_percent: 2,
         opacity: 50,
         scale_percent: 20,
       });
+      expect(screen.getByRole("radio", { name: "Text" })).toBeChecked();
       expect(
-        screen.getByText("Choose a PNG to start the conversion"),
+        screen.getByText("Enter text to start the conversion"),
       ).toBeInTheDocument();
       expect(screen.getByRole("radio", { name: "Bottom right" })).toBeChecked();
     });
 
     it("無効に戻すと watermark が null になる", async () => {
       const user = userEvent.setup();
-      renderPanel();
+      await renderWithFonts();
 
       await enable(user);
       await enable(user);
@@ -341,11 +430,54 @@ describe("SettingsPanel", () => {
       expect(currentOptions().watermark).toBeNull();
     });
 
+    it("種類は文字か画像のどちらか一方で、切り替えても配置は保たれる", async () => {
+      const user = userEvent.setup();
+      await renderWithFonts({
+        watermark: textWatermark({ position: "top_left", opacity: 70 }),
+      });
+
+      await chooseImageKind(user);
+
+      expect(currentOptions().watermark).toEqual({
+        kind: "image",
+        path: "",
+        position: "top_left",
+        margin_percent: 2,
+        opacity: 70,
+        scale_percent: 20,
+      });
+      expect(screen.getByRole("radio", { name: "Text" })).not.toBeChecked();
+      expect(
+        screen.queryByRole("textbox", { name: "Text" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Choose PNG..." }),
+      ).toBeInTheDocument();
+    });
+
+    it("画像から文字に戻すと、前の文字の設定が戻る", async () => {
+      const user = userEvent.setup();
+      await renderWithFonts({
+        watermark: textWatermark({ text: "Keep me", color: "#ff0000" }),
+      });
+
+      await chooseImageKind(user);
+      await user.click(screen.getByRole("radio", { name: "Text" }));
+
+      expect(currentOptions().watermark).toMatchObject({
+        kind: "text",
+        text: "Keep me",
+        color: "#ff0000",
+        font: "HiraginoSans-W3",
+      });
+    });
+
     it("PNG に絞ったファイル選択ダイアログを開き、選んだパスが入る", async () => {
       const user = userEvent.setup();
       openDialog.mockResolvedValue("/tmp/logo.png");
-      renderPanel();
+      await renderWithFonts();
       await enable(user);
+      await chooseImageKind(user);
 
       await user.click(screen.getByRole("button", { name: "Choose PNG..." }));
 
@@ -355,7 +487,10 @@ describe("SettingsPanel", () => {
         filters: [{ name: "PNG", extensions: ["png"] }],
         title: "Choose PNG...",
       });
-      expect(currentOptions().watermark?.path).toBe("/tmp/logo.png");
+      expect(currentOptions().watermark).toMatchObject({
+        kind: "image",
+        path: "/tmp/logo.png",
+      });
       expect(
         screen.getByRole("textbox", { name: "Watermark image (PNG)" }),
       ).toHaveValue("/tmp/logo.png");
@@ -367,17 +502,18 @@ describe("SettingsPanel", () => {
     it("ダイアログをキャンセルしてもパスは変わらない", async () => {
       const user = userEvent.setup();
       openDialog.mockResolvedValue(null);
-      renderPanel();
+      await renderWithFonts();
       await enable(user);
+      await chooseImageKind(user);
 
       await user.click(screen.getByRole("button", { name: "Choose PNG..." }));
 
-      expect(currentOptions().watermark?.path).toBe("");
+      expect(currentOptions().watermark).toMatchObject({ path: "" });
     });
 
     it("位置は 9 つの中から 1 つだけ選べる", async () => {
       const user = userEvent.setup();
-      renderPanel();
+      await renderWithFonts();
       await enable(user);
 
       const group = screen.getByRole("group", { name: "Position" });
@@ -415,7 +551,7 @@ describe("SettingsPanel", () => {
       "%s は範囲つきのスライダーで、数値として store に入る",
       async (name, key, min, max, value) => {
         const user = userEvent.setup();
-        renderPanel();
+        await renderWithFonts();
         await enable(user);
 
         const slider = screen.getByRole("slider", { name });
@@ -432,8 +568,9 @@ describe("SettingsPanel", () => {
     it("詳細を変えても他の設定は保たれる", async () => {
       const user = userEvent.setup();
       openDialog.mockResolvedValue("/tmp/logo.png");
-      renderPanel();
+      await renderWithFonts();
       await enable(user);
+      await chooseImageKind(user);
       await user.click(screen.getByRole("button", { name: "Choose PNG..." }));
 
       fireEvent.change(screen.getByRole("slider", { name: "Opacity" }), {
@@ -447,51 +584,328 @@ describe("SettingsPanel", () => {
       });
     });
 
-    it("処理中はすべて無効化される", () => {
-      useAppStore.setState({ processingState: "processing" });
-      renderPanel({
-        watermark: {
-          path: "/tmp/logo.png",
+    describe("文字", () => {
+      it("入力した文字が store に入り、空でなくなると注意書きが消える", async () => {
+        const user = userEvent.setup();
+        await renderWithFonts({ watermark: textWatermark({ text: "" }) });
+
+        await user.type(screen.getByRole("textbox", { name: "Text" }), "© A");
+
+        expect(currentOptions().watermark).toMatchObject({ text: "© A" });
+        expect(
+          screen.queryByText("Enter text to start the conversion"),
+        ).not.toBeInTheDocument();
+      });
+
+      it("空白だけなら注意書きを出す", async () => {
+        await renderWithFonts({ watermark: textWatermark({ text: "   " }) });
+
+        expect(
+          screen.getByText("Enter text to start the conversion"),
+        ).toBeInTheDocument();
+      });
+
+      it("フォントはシステムフォントの一覧から選ぶ", async () => {
+        const user = userEvent.setup();
+        await renderWithFonts({ watermark: textWatermark() });
+
+        const select = screen.getByRole("combobox", { name: "Font" });
+        expect(
+          within(select)
+            .getAllByRole("option")
+            .map((o) => [(o as HTMLOptionElement).value, o.textContent]),
+        ).toEqual([
+          ["Helvetica", "Helvetica"],
+          ["HiraginoSans-W3", "Hiragino Sans (HiraginoSans-W3)"],
+        ]);
+        expect(select).toHaveValue("HiraginoSans-W3");
+
+        await user.selectOptions(select, "Helvetica");
+
+        expect(currentOptions().watermark).toMatchObject({
+          font: "Helvetica",
+        });
+      });
+
+      it("フォントを読み込めなければエラーを出し、選択欄は無効", async () => {
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        fontList = new Error("boom");
+        await renderWithFonts({ watermark: textWatermark() });
+
+        expect(
+          screen.getByText("Could not load the system fonts"),
+        ).toBeInTheDocument();
+        expect(screen.getByRole("combobox", { name: "Font" })).toBeDisabled();
+        vi.mocked(console.error).mockRestore();
+      });
+
+      it("色を変えると store に入る", async () => {
+        await renderWithFonts({ watermark: textWatermark() });
+
+        fireEvent.input(screen.getByLabelText("Color"), {
+          target: { value: "#ff8800" },
+        });
+
+        expect(currentOptions().watermark).toMatchObject({
+          color: "#ff8800",
+        });
+      });
+
+      it("縁取りは任意で、色と太さ（1〜20%）を指定できる", async () => {
+        const user = userEvent.setup();
+        await renderWithFonts({ watermark: textWatermark() });
+
+        expect(
+          screen.queryByRole("slider", {
+            name: "Outline width (% of font size)",
+          }),
+        ).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole("checkbox", { name: "Outline" }));
+
+        expect(currentOptions().watermark).toMatchObject({
+          outline: { color: "#000000", width_percent: 5 },
+        });
+        const slider = screen.getByRole("slider", {
+          name: "Outline width (% of font size)",
+        });
+        expect(slider).toHaveAttribute("min", "1");
+        expect(slider).toHaveAttribute("max", "20");
+
+        fireEvent.change(slider, { target: { value: "12" } });
+        fireEvent.input(screen.getByLabelText("Outline color"), {
+          target: { value: "#112233" },
+        });
+
+        expect(currentOptions().watermark).toMatchObject({
+          outline: { color: "#112233", width_percent: 12 },
+        });
+
+        await user.click(screen.getByRole("checkbox", { name: "Outline" }));
+
+        expect(currentOptions().watermark).toMatchObject({ outline: null });
+      });
+
+      it("フォントに無い文字があれば警告する", async () => {
+        missingGlyphs = ["あ", "😀"];
+        await renderWithFonts({
+          watermark: textWatermark({ text: "Aあ😀", font: "Helvetica" }),
+        });
+
+        expect(
+          await screen.findByText(
+            "This font cannot draw あ 😀. They will come out as boxes or blanks.",
+          ),
+        ).toBeInTheDocument();
+        expect(invokeMock).toHaveBeenCalledWith("find_missing_glyphs", {
+          font: "Helvetica",
+          text: "Aあ😀",
+        });
+      });
+
+      it("無い文字が無ければ警告しない", async () => {
+        await renderWithFonts({ watermark: textWatermark() });
+
+        await waitFor(() =>
+          expect(invokeMock).toHaveBeenCalledWith(
+            "find_missing_glyphs",
+            expect.anything(),
+          ),
+        );
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      });
+    });
+
+    describe("設定の保存", () => {
+      const saved = () =>
+        JSON.parse(localStorage.getItem(WATERMARK_STORAGE_KEY) ?? "null");
+
+      // 保存内容から起動し直したときの store を作る
+      const relaunch = (stored: unknown) => {
+        localStorage.setItem(WATERMARK_STORAGE_KEY, JSON.stringify(stored));
+        useAppStore.getState().setOptions({ watermark: initialWatermark() });
+      };
+
+      it("変更は画像パスを除いて保存される", async () => {
+        const user = userEvent.setup();
+        openDialog.mockResolvedValue("/tmp/logo.png");
+        await renderWithFonts({ watermark: textWatermark({ text: "Saved" }) });
+
+        await chooseImageKind(user);
+        await user.click(screen.getByRole("button", { name: "Choose PNG..." }));
+
+        expect(saved()).toEqual({
+          ...DEFAULT_SAVED_WATERMARK,
+          enabled: true,
+          kind: "image",
           position: "center",
-          margin_percent: 2,
+          text: "Saved",
+          font: "HiraginoSans-W3",
+        });
+        expect(JSON.stringify(saved())).not.toContain("/tmp/logo.png");
+      });
+
+      it("保存された設定で始まる", async () => {
+        relaunch({
+          ...DEFAULT_SAVED_WATERMARK,
+          enabled: true,
+          text: "Restored",
+          font: "Helvetica",
+          opacity: 30,
+        });
+        await renderWithFonts();
+
+        expect(
+          screen.getByRole("checkbox", { name: "Add watermark" }),
+        ).toBeChecked();
+        expect(screen.getByRole("textbox", { name: "Text" })).toHaveValue(
+          "Restored",
+        );
+        expect(screen.getByRole("combobox", { name: "Font" })).toHaveValue(
+          "Helvetica",
+        );
+        expect(currentOptions().watermark).toMatchObject({ opacity: 30 });
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      });
+
+      it("保存されたフォントが無ければ既定フォントに切り替えて通知する", async () => {
+        const user = userEvent.setup();
+        relaunch({
+          ...DEFAULT_SAVED_WATERMARK,
+          enabled: true,
+          text: "Restored",
+          font: "Gone-Font",
+        });
+        await renderWithFonts();
+
+        expect(currentOptions().watermark).toMatchObject({
+          font: "HiraginoSans-W3",
+        });
+        expect(screen.getByRole("status")).toHaveTextContent(
+          'The saved font "Gone-Font" is not installed. Switched to "HiraginoSans-W3".',
+        );
+        expect(saved().font).toBe("HiraginoSans-W3");
+
+        await user.click(screen.getByRole("button", { name: "Dismiss" }));
+
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      });
+
+      it("オフのままでも、無くなったフォントは切り替えて通知する", async () => {
+        relaunch({
+          ...DEFAULT_SAVED_WATERMARK,
+          enabled: false,
+          font: "Gone-Font",
+        });
+        await renderWithFonts();
+
+        expect(currentOptions().watermark).toBeNull();
+        expect(screen.getByRole("status")).toBeInTheDocument();
+        expect(loadSavedWatermark().font).toBe("HiraginoSans-W3");
+      });
+
+      it("フォント未設定なら黙って既定フォントにする", async () => {
+        await renderWithFonts();
+
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        expect(loadSavedWatermark().font).toBe("HiraginoSans-W3");
+      });
+
+      it("範囲外の値はその項目だけ既定値に戻る", async () => {
+        relaunch({
+          ...DEFAULT_SAVED_WATERMARK,
+          enabled: true,
+          text: "Restored",
+          font: "Helvetica",
+          opacity: 300,
+          margin_percent: 5,
+        });
+        await renderWithFonts();
+
+        expect(currentOptions().watermark).toMatchObject({
+          text: "Restored",
           opacity: 50,
-          scale_percent: 20,
-        },
+          margin_percent: 5,
+        });
+      });
+    });
+
+    it("処理中はすべて無効化される", async () => {
+      useAppStore.setState({ processingState: "processing" });
+      await renderWithFonts({
+        watermark: textWatermark({
+          outline: { color: "#000000", width_percent: 5 },
+        }),
       });
 
       expect(
-        screen.getByRole("checkbox", { name: "Add image watermark" }),
+        screen.getByRole("checkbox", { name: "Add watermark" }),
       ).toBeDisabled();
+      for (const radio of screen.getAllByRole("radio")) {
+        expect(radio).toBeDisabled();
+      }
+      expect(screen.getByRole("textbox", { name: "Text" })).toBeDisabled();
+      expect(screen.getByRole("combobox", { name: "Font" })).toBeDisabled();
+      expect(screen.getByLabelText("Color")).toBeDisabled();
+      expect(screen.getByRole("checkbox", { name: "Outline" })).toBeDisabled();
+      expect(screen.getByLabelText("Outline color")).toBeDisabled();
+      expect(screen.getByRole("slider", { name: "Opacity" })).toBeDisabled();
+    });
+
+    it("画像の種類でも処理中はすべて無効化される", async () => {
+      useAppStore.setState({ processingState: "processing" });
+      await renderWithFonts({
+        watermark: imageWatermark({ path: "/tmp/logo.png" }),
+      });
+
       expect(
         screen.getByRole("button", { name: "Choose PNG..." }),
       ).toBeDisabled();
-      for (const radio of within(
-        screen.getByRole("group", { name: "Position" }),
-      ).getAllByRole("radio")) {
+      for (const radio of screen.getAllByRole("radio")) {
         expect(radio).toBeDisabled();
       }
-      expect(screen.getByRole("slider", { name: "Opacity" })).toBeDisabled();
     });
 
     it("日本語でもラベルが出る", async () => {
       await i18n.changeLanguage("ja");
-      renderPanel({
-        watermark: {
-          path: "",
-          position: "center",
-          margin_percent: 2,
-          opacity: 50,
-          scale_percent: 20,
-        },
+      await renderWithFonts({
+        watermark: textWatermark({
+          text: "",
+          outline: { color: "#000000", width_percent: 5 },
+        }),
       });
 
       expect(
-        screen.getByRole("checkbox", { name: "画像ウォーターマークを入れる" }),
+        screen.getByRole("checkbox", { name: "ウォーターマークを入れる" }),
       ).toBeChecked();
+      expect(screen.getByRole("radio", { name: "文字" })).toBeChecked();
+      expect(screen.getByRole("radio", { name: "画像" })).not.toBeChecked();
+      expect(screen.getByRole("textbox", { name: "文字" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("combobox", { name: "フォント" }),
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText("色")).toBeInTheDocument();
+      expect(
+        screen.getByRole("checkbox", { name: "縁取り" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("slider", {
+          name: "縁取りの太さ（文字サイズに対する %）",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("変換を始めるには文字を入力してください"),
+      ).toBeInTheDocument();
       expect(screen.getByRole("radio", { name: "中央" })).toBeChecked();
       expect(
         screen.getByRole("slider", { name: "不透明度" }),
       ).toBeInTheDocument();
+    });
+
+    it("日本語で画像の欄にもラベルが出る", async () => {
+      await i18n.changeLanguage("ja");
+      await renderWithFonts({ watermark: imageWatermark() });
+
       expect(
         screen.getByRole("button", { name: "PNG を選ぶ..." }),
       ).toBeInTheDocument();

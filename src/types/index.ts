@@ -17,13 +17,50 @@ export type WatermarkPosition =
   | "bottom_center"
   | "bottom_right";
 
-// Image watermark
-export interface ImageWatermark {
-  path: string;
+// Placement shared by both watermark kinds
+export interface WatermarkPlacement {
   position: WatermarkPosition;
   margin_percent: number;
   opacity: number;
   scale_percent: number;
+}
+
+// Image watermark
+export interface ImageWatermark extends WatermarkPlacement {
+  kind: "image";
+  path: string;
+}
+
+// Outline around the watermark text
+export interface TextOutline {
+  color: string;
+  width_percent: number;
+}
+
+// Text watermark
+export interface TextWatermark extends WatermarkPlacement {
+  kind: "text";
+  text: string;
+  // PostScript name
+  font: string;
+  color: string;
+  outline: TextOutline | null;
+}
+
+// Text or image, never both
+export type Watermark = ImageWatermark | TextWatermark;
+
+export type WatermarkKind = Watermark["kind"];
+
+// System font
+export interface FontInfo {
+  id: string;
+  family: string;
+}
+
+export interface FontList {
+  fonts: FontInfo[];
+  default_font: string | null;
 }
 
 // Processing options
@@ -34,7 +71,7 @@ export interface ProcessingOptions {
   height: number | null;
   keep_metadata: boolean;
   compression: CompressionType;
-  watermark: ImageWatermark | null;
+  watermark: Watermark | null;
 }
 
 // Processing result for single image

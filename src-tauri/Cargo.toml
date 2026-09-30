@@ -42,3 +42,7 @@ anyhow = "1"
 # HTTP client for update checking
 reqwest = { version = "0.12", features = ["json"] }
 
+# System font discovery and text rendering
+fontdb = "0.24"
+ab_glyph = "0.2"
+
