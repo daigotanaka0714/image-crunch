@@ -18,6 +18,8 @@ export const WATERMARK_LIMITS = {
   opacity: { min: 1, max: 100 },
   scale_percent: { min: 1, max: 100 },
   outline_width_percent: { min: 1, max: 20 },
+  tile_spacing_percent: { min: 0, max: 50 },
+  tile_angle_degrees: { min: -90, max: 90 },
 } as const;
 
 // Watermark settings kept across launches. The image path is not saved.
@@ -28,6 +30,9 @@ export interface SavedWatermark {
   margin_percent: number;
   opacity: number;
   scale_percent: number;
+  tile_enabled: boolean;
+  tile_spacing_percent: number;
+  tile_angle_degrees: number;
   text: string;
   // PostScript name. "" means the default font.
   font: string;
@@ -44,6 +49,9 @@ export const DEFAULT_SAVED_WATERMARK: SavedWatermark = {
   margin_percent: 2,
   opacity: 50,
   scale_percent: 20,
+  tile_enabled: false,
+  tile_spacing_percent: 10,
+  tile_angle_degrees: 30,
   text: "",
   font: "",
   color: "#ffffff",
@@ -73,6 +81,9 @@ const VALIDATORS: Record<keyof SavedWatermark, (value: unknown) => boolean> = {
   margin_percent: inRange(WATERMARK_LIMITS.margin_percent),
   opacity: inRange(WATERMARK_LIMITS.opacity),
   scale_percent: inRange(WATERMARK_LIMITS.scale_percent),
+  tile_enabled: isBoolean,
+  tile_spacing_percent: inRange(WATERMARK_LIMITS.tile_spacing_percent),
+  tile_angle_degrees: inRange(WATERMARK_LIMITS.tile_angle_degrees),
   text: isString,
   font: isString,
   color: isHexColor,
@@ -132,6 +143,11 @@ export function toSaved(
     margin_percent: watermark.margin_percent,
     opacity: watermark.opacity,
     scale_percent: watermark.scale_percent,
+    tile_enabled: watermark.tile !== null,
+    tile_spacing_percent:
+      watermark.tile?.spacing_percent ?? previous.tile_spacing_percent,
+    tile_angle_degrees:
+      watermark.tile?.angle_degrees ?? previous.tile_angle_degrees,
   };
   if (watermark.kind === "image") {
     return { ...previous, ...placement };
@@ -158,6 +174,12 @@ export function fromSaved(
     margin_percent: saved.margin_percent,
     opacity: saved.opacity,
     scale_percent: saved.scale_percent,
+    tile: saved.tile_enabled
+      ? {
+          spacing_percent: saved.tile_spacing_percent,
+          angle_degrees: saved.tile_angle_degrees,
+        }
+      : null,
   };
   if (kind === "image") {
     return { kind: "image", path: "", ...placement };

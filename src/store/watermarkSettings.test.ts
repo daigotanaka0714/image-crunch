@@ -17,6 +17,9 @@ const VALID: SavedWatermark = {
   margin_percent: 20,
   opacity: 1,
   scale_percent: 100,
+  tile_enabled: true,
+  tile_spacing_percent: 50,
+  tile_angle_degrees: -90,
   text: "© Example",
   font: "Helvetica",
   color: "#A0b1C2",
@@ -53,6 +56,11 @@ describe("sanitizeSavedWatermark", () => {
     ["outline_color", "#0000000"],
     ["outline_width_percent", 0],
     ["outline_width_percent", 21],
+    ["tile_enabled", "true"],
+    ["tile_spacing_percent", -1],
+    ["tile_spacing_percent", 51],
+    ["tile_angle_degrees", -91],
+    ["tile_angle_degrees", 91],
   ] as const)("%s が %s なら、その項目だけ既定値に戻す", (key, value) => {
     expect(sanitizeSavedWatermark({ ...VALID, [key]: value })).toEqual({
       ...VALID,
@@ -102,6 +110,7 @@ describe("toSaved / fromSaved", () => {
     margin_percent: 3,
     opacity: 60,
     scale_percent: 40,
+    tile: null,
   };
 
   it("文字ウォーターマークは保存して戻すと同じになる", () => {
@@ -118,6 +127,7 @@ describe("toSaved / fromSaved", () => {
         margin_percent: 1,
         opacity: 90,
         scale_percent: 10,
+        tile: { spacing_percent: 20, angle_degrees: 45 },
       },
       previous,
     );
@@ -130,6 +140,7 @@ describe("toSaved / fromSaved", () => {
       margin_percent: 1,
       opacity: 90,
       scale_percent: 10,
+      tile: { spacing_percent: 20, angle_degrees: 45 },
     });
     expect(fromSaved(saved, "text")).toEqual({
       ...text,
@@ -137,6 +148,7 @@ describe("toSaved / fromSaved", () => {
       margin_percent: 1,
       opacity: 90,
       scale_percent: 10,
+      tile: { spacing_percent: 20, angle_degrees: 45 },
     });
   });
 
@@ -149,6 +161,21 @@ describe("toSaved / fromSaved", () => {
       outline_width_percent: 5,
     });
     expect(fromSaved(saved)).toMatchObject({ outline: null });
+  });
+
+  it("1 か所に戻しても、間隔と角度は次に敷き詰めるときのために残す", () => {
+    const tiled = toSaved(
+      { ...text, tile: { spacing_percent: 25, angle_degrees: -45 } },
+      DEFAULT_SAVED_WATERMARK,
+    );
+    const single = toSaved({ ...text, tile: null }, tiled);
+
+    expect(single).toMatchObject({
+      tile_enabled: false,
+      tile_spacing_percent: 25,
+      tile_angle_degrees: -45,
+    });
+    expect(fromSaved(single)).toMatchObject({ tile: null });
   });
 
   it("オフにすると enabled だけが false になる", () => {

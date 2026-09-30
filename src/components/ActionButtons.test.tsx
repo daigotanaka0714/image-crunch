@@ -205,6 +205,7 @@ describe("ActionButtons", () => {
           margin_percent: 2,
           opacity: 50,
           scale_percent: 20,
+          tile: null,
         },
       });
       render(<ActionButtons />);
@@ -222,6 +223,7 @@ describe("ActionButtons", () => {
           margin_percent: 2,
           opacity: 50,
           scale_percent: 20,
+          tile: null,
         },
       });
       render(<ActionButtons />);
@@ -249,6 +251,7 @@ describe("ActionButtons", () => {
             margin_percent: 2,
             opacity: 50,
             scale_percent: 20,
+            tile: null,
           },
         });
         render(<ActionButtons />);

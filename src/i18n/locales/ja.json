@@ -50,6 +50,11 @@
     "watermarkChoose": "PNG を選ぶ...",
     "watermarkNoFile": "ファイル未指定",
     "watermarkRequired": "変換を始めるには PNG を選んでください",
+    "watermarkLayout": "配置",
+    "watermarkLayoutSingle": "1 か所",
+    "watermarkLayoutTile": "全面に敷き詰め",
+    "watermarkSpacing": "間隔（画像の幅に対する %）",
+    "watermarkAngle": "角度",
     "watermarkPosition": "位置",
     "watermarkPositions": {
       "top_left": "左上",

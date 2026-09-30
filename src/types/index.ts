@@ -17,12 +17,20 @@ export type WatermarkPosition =
   | "bottom_center"
   | "bottom_right";
 
+// Repeat the watermark over the whole image
+export interface WatermarkTile {
+  spacing_percent: number;
+  angle_degrees: number;
+}
+
 // Placement shared by both watermark kinds
 export interface WatermarkPlacement {
   position: WatermarkPosition;
   margin_percent: number;
   opacity: number;
   scale_percent: number;
+  // null = placed once at `position`
+  tile: WatermarkTile | null;
 }
 
 // Image watermark
