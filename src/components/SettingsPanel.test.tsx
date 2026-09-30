@@ -351,6 +351,7 @@ describe("SettingsPanel", () => {
       margin_percent: 2,
       opacity: 50,
       scale_percent: 20,
+      tile: null,
       ...patch,
     });
 
@@ -366,6 +367,7 @@ describe("SettingsPanel", () => {
       margin_percent: 2,
       opacity: 50,
       scale_percent: 20,
+      tile: null,
       ...patch,
     });
 
@@ -412,6 +414,7 @@ describe("SettingsPanel", () => {
         margin_percent: 2,
         opacity: 50,
         scale_percent: 20,
+        tile: null,
       });
       expect(screen.getByRole("radio", { name: "Text" })).toBeChecked();
       expect(
@@ -445,6 +448,7 @@ describe("SettingsPanel", () => {
         margin_percent: 2,
         opacity: 70,
         scale_percent: 20,
+        tile: null,
       });
       expect(screen.getByRole("radio", { name: "Text" })).not.toBeChecked();
       expect(
@@ -581,6 +585,126 @@ describe("SettingsPanel", () => {
         path: "/tmp/logo.png",
         opacity: 80,
         scale_percent: 20,
+        tile: null,
+      });
+    });
+
+    describe("敷き詰め", () => {
+      const chooseTile = async (user: ReturnType<typeof userEvent.setup>) =>
+        user.click(screen.getByRole("radio", { name: "Tile over the image" }));
+
+      it("既定は 1 か所で、位置と余白を出す", async () => {
+        await renderWithFonts({ watermark: textWatermark() });
+
+        expect(screen.getByRole("radio", { name: "Once" })).toBeChecked();
+        expect(
+          screen.getByRole("group", { name: "Position" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("slider", { name: "Margin (% of image width)" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByRole("slider", { name: "Angle" }),
+        ).not.toBeInTheDocument();
+      });
+
+      it("敷き詰めにすると間隔と角度が出て、位置と余白は消える", async () => {
+        const user = userEvent.setup();
+        await renderWithFonts({ watermark: textWatermark() });
+
+        await chooseTile(user);
+
+        expect(currentOptions().watermark).toMatchObject({
+          tile: { spacing_percent: 10, angle_degrees: 30 },
+        });
+        expect(
+          screen.queryByRole("group", { name: "Position" }),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole("slider", { name: "Margin (% of image width)" }),
+        ).not.toBeInTheDocument();
+        // サイズと不透明度は敷き詰めでも使う
+        expect(
+          screen.getByRole("slider", { name: "Size (% of image width)" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("slider", { name: "Opacity" }),
+        ).toBeInTheDocument();
+        expect(screen.getByText("30°")).toBeInTheDocument();
+      });
+
+      it.each([
+        [
+          "Spacing (% of image width)",
+          "spacing_percent",
+          "0",
+          "50",
+          "25",
+          "25%",
+        ],
+        ["Angle", "angle_degrees", "-90", "90", "-45", "-45°"],
+      ] as const)(
+        "%s は範囲つきのスライダーで、数値として store に入る",
+        async (name, key, min, max, value, shown) => {
+          const user = userEvent.setup();
+          await renderWithFonts({ watermark: textWatermark() });
+          await chooseTile(user);
+
+          const slider = screen.getByRole("slider", { name });
+          expect(slider).toHaveAttribute("min", min);
+          expect(slider).toHaveAttribute("max", max);
+
+          fireEvent.change(slider, { target: { value } });
+
+          expect(currentOptions().watermark?.tile?.[key]).toBe(Number(value));
+          expect(screen.getByText(shown)).toBeInTheDocument();
+        },
+      );
+
+      it("画像の種類でも敷き詰められ、種類を変えても敷き詰めは保たれる", async () => {
+        const user = userEvent.setup();
+        await renderWithFonts({ watermark: imageWatermark() });
+
+        await chooseTile(user);
+        await user.click(screen.getByRole("radio", { name: "Text" }));
+
+        expect(currentOptions().watermark).toMatchObject({
+          kind: "text",
+          tile: { spacing_percent: 10, angle_degrees: 30 },
+        });
+      });
+
+      it("1 か所に戻すと tile が null になり、位置の欄が戻る", async () => {
+        const user = userEvent.setup();
+        await renderWithFonts({ watermark: textWatermark() });
+
+        await chooseTile(user);
+        await user.click(screen.getByRole("radio", { name: "Once" }));
+
+        expect(currentOptions().watermark).toMatchObject({ tile: null });
+        expect(
+          screen.getByRole("group", { name: "Position" }),
+        ).toBeInTheDocument();
+      });
+
+      it("日本語でもラベルが出る", async () => {
+        await i18n.changeLanguage("ja");
+        await renderWithFonts({
+          watermark: textWatermark({
+            tile: { spacing_percent: 10, angle_degrees: 30 },
+          }),
+        });
+
+        expect(
+          screen.getByRole("radio", { name: "全面に敷き詰め" }),
+        ).toBeChecked();
+        expect(screen.getByRole("radio", { name: "1 か所" })).not.toBeChecked();
+        expect(
+          screen.getByRole("slider", { name: "間隔（画像の幅に対する %）" }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("slider", { name: "角度" }),
+        ).toBeInTheDocument();
       });
     });
 

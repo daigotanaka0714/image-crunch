@@ -16,6 +16,7 @@ import type {
   TextWatermark,
   WatermarkKind,
   WatermarkPlacement,
+  WatermarkTile,
 } from "../types";
 import { FolderIcon, SettingsIcon, XIcon } from "./Icons";
 
@@ -36,6 +37,8 @@ const COLOR_INPUT_CLASS =
 
 const MAX_WATERMARK_MARGIN = WATERMARK_LIMITS.margin_percent.max;
 const MAX_OUTLINE_WIDTH = WATERMARK_LIMITS.outline_width_percent.max;
+const TILE_SPACING = WATERMARK_LIMITS.tile_spacing_percent;
+const TILE_ANGLE = WATERMARK_LIMITS.tile_angle_degrees;
 
 // Fill the range track up to the current value
 const rangeBackground = (value: number, max: number, min = 0) => {
@@ -99,6 +102,24 @@ export function SettingsPanel() {
   const updatePlacement = (patch: Partial<WatermarkPlacement>) => {
     if (watermark) {
       setOptions({ watermark: { ...watermark, ...patch } });
+    }
+  };
+
+  const handleLayoutChange = (tiled: boolean) => {
+    const saved = loadSavedWatermark();
+    updatePlacement({
+      tile: tiled
+        ? {
+            spacing_percent: saved.tile_spacing_percent,
+            angle_degrees: saved.tile_angle_degrees,
+          }
+        : null,
+    });
+  };
+
+  const updateTile = (patch: Partial<WatermarkTile>) => {
+    if (watermark?.tile) {
+      updatePlacement({ tile: { ...watermark.tile, ...patch } });
     }
   };
 
@@ -634,30 +655,62 @@ export function SettingsPanel() {
 
               <fieldset className="space-y-1">
                 <legend className="text-xs font-medium text-slate-500">
-                  {t("settings.watermarkPosition")}
+                  {t("settings.watermarkLayout")}
                 </legend>
-                <div className="grid grid-cols-3 gap-1 w-24">
-                  {WATERMARK_POSITIONS.map((position) => (
+                <div className="flex gap-4">
+                  {([false, true] as const).map((tiled) => (
                     <label
-                      key={position}
-                      className="flex items-center justify-center p-1 cursor-pointer"
-                      title={t(`settings.watermarkPositions.${position}`)}
+                      key={String(tiled)}
+                      className="flex items-center gap-2 cursor-pointer"
                     >
                       <input
                         type="radio"
-                        name="watermark-position"
-                        aria-label={t(
-                          `settings.watermarkPositions.${position}`,
-                        )}
-                        checked={watermark.position === position}
-                        onChange={() => updatePlacement({ position })}
+                        name="watermark-layout"
+                        checked={(watermark.tile !== null) === tiled}
+                        onChange={() => handleLayoutChange(tiled)}
                         disabled={isProcessing}
                         className="custom-radio"
                       />
+                      <span className="text-sm text-slate-700">
+                        {t(
+                          tiled
+                            ? "settings.watermarkLayoutTile"
+                            : "settings.watermarkLayoutSingle",
+                        )}
+                      </span>
                     </label>
                   ))}
                 </div>
               </fieldset>
+
+              {watermark.tile === null && (
+                <fieldset className="space-y-1">
+                  <legend className="text-xs font-medium text-slate-500">
+                    {t("settings.watermarkPosition")}
+                  </legend>
+                  <div className="grid grid-cols-3 gap-1 w-24">
+                    {WATERMARK_POSITIONS.map((position) => (
+                      <label
+                        key={position}
+                        className="flex items-center justify-center p-1 cursor-pointer"
+                        title={t(`settings.watermarkPositions.${position}`)}
+                      >
+                        <input
+                          type="radio"
+                          name="watermark-position"
+                          aria-label={t(
+                            `settings.watermarkPositions.${position}`,
+                          )}
+                          checked={watermark.position === position}
+                          onChange={() => updatePlacement({ position })}
+                          disabled={isProcessing}
+                          className="custom-radio"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
@@ -719,39 +772,113 @@ export function SettingsPanel() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label
-                    className="text-xs font-medium text-slate-500"
-                    htmlFor="settings-watermark-margin"
-                  >
-                    {t("settings.watermarkMargin")}
-                  </label>
-                  <span className="text-xs font-bold text-indigo-600">
-                    {watermark.margin_percent}%
-                  </span>
+              {watermark.tile ? (
+                <>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label
+                        className="text-xs font-medium text-slate-500"
+                        htmlFor="settings-watermark-spacing"
+                      >
+                        {t("settings.watermarkSpacing")}
+                      </label>
+                      <span className="text-xs font-bold text-indigo-600">
+                        {watermark.tile.spacing_percent}%
+                      </span>
+                    </div>
+                    <input
+                      id="settings-watermark-spacing"
+                      type="range"
+                      min={TILE_SPACING.min}
+                      max={TILE_SPACING.max}
+                      value={watermark.tile.spacing_percent}
+                      onChange={(e) =>
+                        updateTile({
+                          spacing_percent: parseInt(e.target.value, 10),
+                        })
+                      }
+                      disabled={isProcessing}
+                      className="w-full disabled:opacity-50"
+                      style={{
+                        background: rangeBackground(
+                          watermark.tile.spacing_percent,
+                          TILE_SPACING.max,
+                          TILE_SPACING.min,
+                        ),
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label
+                        className="text-xs font-medium text-slate-500"
+                        htmlFor="settings-watermark-angle"
+                      >
+                        {t("settings.watermarkAngle")}
+                      </label>
+                      <span className="text-xs font-bold text-indigo-600">
+                        {watermark.tile.angle_degrees}°
+                      </span>
+                    </div>
+                    <input
+                      id="settings-watermark-angle"
+                      type="range"
+                      min={TILE_ANGLE.min}
+                      max={TILE_ANGLE.max}
+                      value={watermark.tile.angle_degrees}
+                      onChange={(e) =>
+                        updateTile({
+                          angle_degrees: parseInt(e.target.value, 10),
+                        })
+                      }
+                      disabled={isProcessing}
+                      className="w-full disabled:opacity-50"
+                      style={{
+                        background: rangeBackground(
+                          watermark.tile.angle_degrees,
+                          TILE_ANGLE.max,
+                          TILE_ANGLE.min,
+                        ),
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label
+                      className="text-xs font-medium text-slate-500"
+                      htmlFor="settings-watermark-margin"
+                    >
+                      {t("settings.watermarkMargin")}
+                    </label>
+                    <span className="text-xs font-bold text-indigo-600">
+                      {watermark.margin_percent}%
+                    </span>
+                  </div>
+                  <input
+                    id="settings-watermark-margin"
+                    type="range"
+                    min="0"
+                    max={MAX_WATERMARK_MARGIN}
+                    value={watermark.margin_percent}
+                    onChange={(e) =>
+                      updatePlacement({
+                        margin_percent: parseInt(e.target.value, 10),
+                      })
+                    }
+                    disabled={isProcessing}
+                    className="w-full disabled:opacity-50"
+                    style={{
+                      background: rangeBackground(
+                        watermark.margin_percent,
+                        MAX_WATERMARK_MARGIN,
+                      ),
+                    }}
+                  />
                 </div>
-                <input
-                  id="settings-watermark-margin"
-                  type="range"
-                  min="0"
-                  max={MAX_WATERMARK_MARGIN}
-                  value={watermark.margin_percent}
-                  onChange={(e) =>
-                    updatePlacement({
-                      margin_percent: parseInt(e.target.value, 10),
-                    })
-                  }
-                  disabled={isProcessing}
-                  className="w-full disabled:opacity-50"
-                  style={{
-                    background: rangeBackground(
-                      watermark.margin_percent,
-                      MAX_WATERMARK_MARGIN,
-                    ),
-                  }}
-                />
-              </div>
+              )}
             </div>
           )}
         </div>

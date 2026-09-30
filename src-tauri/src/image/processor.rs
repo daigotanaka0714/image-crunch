@@ -5,6 +5,7 @@ use thiserror::Error;
 
 use super::formats::OutputFormat;
 use super::text::{self, TextStyle};
+use super::tile;
 
 /// Image processing errors
 #[derive(Error, Debug)]
@@ -34,7 +35,16 @@ pub enum WatermarkPosition {
     BottomRight,
 }
 
-/// Image watermark drawn once over the output image
+/// Repeat the watermark over the whole image instead of placing it once
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WatermarkTile {
+    /// Gap between marks, as a percentage of the output width (0-50)
+    pub spacing_percent: f32,
+    /// Counterclockwise rotation of the marks and the grid, in degrees (-90-90)
+    pub angle_degrees: f32,
+}
+
+/// Image watermark drawn over the output image
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageWatermark {
     /// Path to the watermark image (a PNG with transparency is expected)
@@ -47,6 +57,9 @@ pub struct ImageWatermark {
     pub opacity: u8,
     /// Watermark width, as a percentage of the output width (1-100)
     pub scale_percent: f32,
+    /// Tiling (None = placed once at `position`)
+    #[serde(default)]
+    pub tile: Option<WatermarkTile>,
 }
 
 /// Outline around the watermark text
@@ -58,7 +71,7 @@ pub struct TextOutline {
     pub width_percent: f32,
 }
 
-/// Text watermark drawn once over the output image
+/// Text watermark drawn over the output image
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextWatermark {
     /// Text drawn on one line
@@ -77,6 +90,9 @@ pub struct TextWatermark {
     pub opacity: u8,
     /// Text width, as a percentage of the output width (1-100)
     pub scale_percent: f32,
+    /// Tiling (None = placed once at `position`)
+    #[serde(default)]
+    pub tile: Option<WatermarkTile>,
 }
 
 /// Watermark drawn over the output image: text or an image, never both
@@ -270,6 +286,7 @@ impl ImageProcessor {
             mark,
             watermark.position,
             watermark.margin_percent,
+            watermark.tile.as_ref(),
             watermark.opacity,
         )
     }
@@ -304,14 +321,16 @@ impl ImageProcessor {
                 mark,
                 watermark.position,
                 watermark.margin_percent,
+                watermark.tile.as_ref(),
                 watermark.opacity,
             ),
             _ => img,
         })
     }
 
-    /// Apply opacity to `mark` and alpha-blend it at `position`, `margin_percent`
-    /// of the output width away from the edges.
+    /// Apply opacity to `mark` and alpha-blend it over the image: tiled when
+    /// `tile` is set, otherwise once at `position`, `margin_percent` of the
+    /// output width away from the edges.
     ///
     /// Blending is done in RGBA8. An image without alpha is converted back to
     /// RGB8 afterwards, so opaque inputs stay opaque in every output format.
@@ -320,6 +339,7 @@ impl ImageProcessor {
         mut mark: RgbaImage,
         position: WatermarkPosition,
         margin_percent: f32,
+        tile: Option<&WatermarkTile>,
         opacity: u8,
     ) -> DynamicImage {
         let (width, height) = (img.width(), img.height());
@@ -329,33 +349,50 @@ impl ImageProcessor {
             pixel[3] = (pixel[3] as u16 * opacity / 100) as u8;
         }
 
-        let margin = (width as f64 * margin_percent.clamp(0.0, 50.0) as f64 / 100.0).round() as i64;
-        let free_x = width as i64 - mark.width() as i64;
-        let free_y = height as i64 - mark.height() as i64;
-        let (x, y) = {
-            use WatermarkPosition::*;
-            let x = match position {
-                TopLeft | MiddleLeft | BottomLeft => margin,
-                TopCenter | Center | BottomCenter => free_x / 2,
-                TopRight | MiddleRight | BottomRight => free_x - margin,
-            };
-            let y = match position {
-                TopLeft | TopCenter | TopRight => margin,
-                MiddleLeft | Center | MiddleRight => free_y / 2,
-                BottomLeft | BottomCenter | BottomRight => free_y - margin,
-            };
-            (x, y)
-        };
-
         let has_alpha = img.color().has_alpha();
         let mut base = img.to_rgba8();
-        image::imageops::overlay(&mut base, &mark, x, y);
+        match tile {
+            Some(settings) => {
+                let gap = width as f64 * settings.spacing_percent.clamp(0.0, 50.0) as f64 / 100.0;
+                let angle = settings.angle_degrees.clamp(-90.0, 90.0) as f64;
+                tile::tile(&mut base, &mark, gap, angle);
+            }
+            None => {
+                let (x, y) = Self::anchor(width, height, &mark, position, margin_percent);
+                image::imageops::overlay(&mut base, &mark, x, y);
+            }
+        }
 
         if has_alpha {
             DynamicImage::ImageRgba8(base)
         } else {
             DynamicImage::ImageRgb8(DynamicImage::ImageRgba8(base).to_rgb8())
         }
+    }
+
+    /// Top-left corner of a mark placed once at `position`
+    fn anchor(
+        width: u32,
+        height: u32,
+        mark: &RgbaImage,
+        position: WatermarkPosition,
+        margin_percent: f32,
+    ) -> (i64, i64) {
+        use WatermarkPosition::*;
+        let margin = (width as f64 * margin_percent.clamp(0.0, 50.0) as f64 / 100.0).round() as i64;
+        let free_x = width as i64 - mark.width() as i64;
+        let free_y = height as i64 - mark.height() as i64;
+        let x = match position {
+            TopLeft | MiddleLeft | BottomLeft => margin,
+            TopCenter | Center | BottomCenter => free_x / 2,
+            TopRight | MiddleRight | BottomRight => free_x - margin,
+        };
+        let y = match position {
+            TopLeft | TopCenter | TopRight => margin,
+            MiddleLeft | Center | MiddleRight => free_y / 2,
+            BottomLeft | BottomCenter | BottomRight => free_y - margin,
+        };
+        (x, y)
     }
 
     /// Save image in specified format
@@ -440,6 +477,7 @@ mod tests {
             margin_percent: 0.0,
             opacity: 100,
             scale_percent: 25.0,
+            tile: None,
         }
     }
 
@@ -690,6 +728,7 @@ mod tests {
                     margin_percent: 0.0,
                     opacity: 100,
                     scale_percent: 50.0,
+                    tile: None,
                 })),
                 ..ProcessingOptions::default()
             };
@@ -754,6 +793,7 @@ mod tests {
             margin_percent: 0.0,
             opacity: 100,
             scale_percent: 50.0,
+            tile: None,
         }
     }
 
@@ -940,6 +980,130 @@ mod tests {
             assert!(left >= 60, "{:?} left {}", format, left);
             assert!(right >= 124, "{:?} right {}", format, right);
             assert!(bottom >= 60, "{:?} bottom {}", format, bottom);
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    const TILE: WatermarkTile = WatermarkTile {
+        spacing_percent: 10.0,
+        angle_degrees: 0.0,
+    };
+
+    #[test]
+    fn tile_deserializes_and_defaults_to_none() {
+        let with_tile: ProcessingOptions = serde_json::from_str(
+            r#"{
+                "format": "png", "quality": 80, "width": null, "height": null,
+                "keep_metadata": false, "compression": "lossy",
+                "watermark": {
+                    "kind": "image", "path": "/tmp/logo.png", "position": "center",
+                    "margin_percent": 2, "opacity": 50, "scale_percent": 20,
+                    "tile": { "spacing_percent": 15, "angle_degrees": -30 }
+                }
+            }"#,
+        )
+        .unwrap();
+        let Some(Watermark::Image(watermark)) = with_tile.watermark else {
+            panic!("expected an image watermark");
+        };
+        let tile = watermark.tile.unwrap();
+        assert_eq!(tile.spacing_percent, 15.0);
+        assert_eq!(tile.angle_degrees, -30.0);
+
+        let without_tile: ProcessingOptions = serde_json::from_str(
+            r#"{
+                "format": "png", "quality": 80, "width": null, "height": null,
+                "keep_metadata": false, "compression": "lossy",
+                "watermark": {
+                    "kind": "image", "path": "/tmp/logo.png", "position": "center",
+                    "margin_percent": 2, "opacity": 50, "scale_percent": 20
+                }
+            }"#,
+        )
+        .unwrap();
+        let Some(Watermark::Image(watermark)) = without_tile.watermark else {
+            panic!("expected an image watermark");
+        };
+        assert!(watermark.tile.is_none());
+    }
+
+    #[test]
+    fn tiled_image_watermark_covers_the_whole_image_and_ignores_position() {
+        // 100x100 base, 10% marks (10x10), 10% gap -> a mark every 20px
+        let settings = ImageWatermark {
+            scale_percent: 10.0,
+            margin_percent: 20.0,
+            tile: Some(TILE),
+            ..watermark(WatermarkPosition::TopLeft)
+        };
+        let out =
+            ImageProcessor::composite_watermark(blue_base(100, 100), &red_mark(20, 20), &settings);
+
+        for (x, y) in [(50, 50), (10, 50), (90, 50), (40, 70), (50, 10)] {
+            assert_eq!(rgb_at(&out, x, y), [255, 0, 0], "({}, {})", x, y);
+        }
+        assert_eq!(rgb_at(&out, 50, 60), BLUE.0);
+        assert!(!out.color().has_alpha());
+    }
+
+    #[test]
+    fn tiled_watermark_uses_the_opacity() {
+        let settings = ImageWatermark {
+            scale_percent: 10.0,
+            opacity: 50,
+            tile: Some(TILE),
+            ..watermark(WatermarkPosition::Center)
+        };
+        let out =
+            ImageProcessor::composite_watermark(blue_base(100, 100), &red_mark(20, 20), &settings);
+
+        let [r, g, b] = rgb_at(&out, 50, 50);
+        assert!((126..=129).contains(&r), "r = {}", r);
+        assert_eq!(g, 0);
+        assert!((126..=129).contains(&b), "b = {}", b);
+    }
+
+    #[test]
+    fn tiled_text_watermark_is_applied_in_every_output_format() {
+        let dir = scratch_dir("text-tile-all-formats");
+        let input = dir.join("input.png");
+        RgbImage::from_pixel(256, 256, BLUE).save(&input).unwrap();
+
+        for format in [
+            OutputFormat::Jpeg,
+            OutputFormat::Png,
+            OutputFormat::Gif,
+            OutputFormat::Bmp,
+            OutputFormat::Tiff,
+            OutputFormat::WebP,
+        ] {
+            let output = dir.join(format!("out.{}", format.extension()));
+            let options = ProcessingOptions {
+                format,
+                quality: 90,
+                watermark: Some(Watermark::Text(TextWatermark {
+                    scale_percent: 20.0,
+                    tile: Some(WatermarkTile {
+                        spacing_percent: 5.0,
+                        angle_degrees: -30.0,
+                    }),
+                    ..text_watermark(WatermarkPosition::Center)
+                })),
+                ..ProcessingOptions::default()
+            };
+
+            ImageProcessor::process_image(&input, &output, &options)
+                .unwrap_or_else(|e| panic!("{:?}: {}", format, e));
+
+            // Every 64x64 quadrant gets part of a mark
+            let out = image::open(&output).unwrap().to_rgb8();
+            for (qx, qy) in [(0, 0), (192, 0), (0, 192), (192, 192)] {
+                let drawn = (qx..qx + 64)
+                    .flat_map(|x| (qy..qy + 64).map(move |y| (x, y)))
+                    .any(|(x, y)| !close(out.get_pixel(x, y).0, BLUE.0, 40));
+                assert!(drawn, "{:?}: nothing in quadrant ({}, {})", format, qx, qy);
+            }
         }
 
         let _ = std::fs::remove_dir_all(&dir);

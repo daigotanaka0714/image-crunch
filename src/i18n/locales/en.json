@@ -50,6 +50,11 @@
     "watermarkChoose": "Choose PNG...",
     "watermarkNoFile": "No file chosen",
     "watermarkRequired": "Choose a PNG to start the conversion",
+    "watermarkLayout": "Layout",
+    "watermarkLayoutSingle": "Once",
+    "watermarkLayoutTile": "Tile over the image",
+    "watermarkSpacing": "Spacing (% of image width)",
+    "watermarkAngle": "Angle",
     "watermarkPosition": "Position",
     "watermarkPositions": {
       "top_left": "Top left",
