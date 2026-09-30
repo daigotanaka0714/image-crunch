@@ -296,6 +296,208 @@ describe("SettingsPanel", () => {
     });
   });
 
+  describe("ウォーターマーク", () => {
+    const enable = async (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole("checkbox", { name: "Add image watermark" }));
+
+    it("既定はオフで、詳細の欄は出ない", () => {
+      renderPanel();
+
+      expect(
+        screen.getByRole("checkbox", { name: "Add image watermark" }),
+      ).not.toBeChecked();
+      expect(currentOptions().watermark).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: "Choose PNG..." }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("有効にすると既定値が store に入り、画像は未指定のまま", async () => {
+      const user = userEvent.setup();
+      renderPanel();
+
+      await enable(user);
+
+      expect(currentOptions().watermark).toEqual({
+        path: "",
+        position: "bottom_right",
+        margin_percent: 2,
+        opacity: 50,
+        scale_percent: 20,
+      });
+      expect(
+        screen.getByText("Choose a PNG to start the conversion"),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "Bottom right" })).toBeChecked();
+    });
+
+    it("無効に戻すと watermark が null になる", async () => {
+      const user = userEvent.setup();
+      renderPanel();
+
+      await enable(user);
+      await enable(user);
+
+      expect(currentOptions().watermark).toBeNull();
+    });
+
+    it("PNG に絞ったファイル選択ダイアログを開き、選んだパスが入る", async () => {
+      const user = userEvent.setup();
+      openDialog.mockResolvedValue("/tmp/logo.png");
+      renderPanel();
+      await enable(user);
+
+      await user.click(screen.getByRole("button", { name: "Choose PNG..." }));
+
+      expect(openDialog).toHaveBeenCalledWith({
+        directory: false,
+        multiple: false,
+        filters: [{ name: "PNG", extensions: ["png"] }],
+        title: "Choose PNG...",
+      });
+      expect(currentOptions().watermark?.path).toBe("/tmp/logo.png");
+      expect(
+        screen.getByRole("textbox", { name: "Watermark image (PNG)" }),
+      ).toHaveValue("/tmp/logo.png");
+      expect(
+        screen.queryByText("Choose a PNG to start the conversion"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("ダイアログをキャンセルしてもパスは変わらない", async () => {
+      const user = userEvent.setup();
+      openDialog.mockResolvedValue(null);
+      renderPanel();
+      await enable(user);
+
+      await user.click(screen.getByRole("button", { name: "Choose PNG..." }));
+
+      expect(currentOptions().watermark?.path).toBe("");
+    });
+
+    it("位置は 9 つの中から 1 つだけ選べる", async () => {
+      const user = userEvent.setup();
+      renderPanel();
+      await enable(user);
+
+      const group = screen.getByRole("group", { name: "Position" });
+      expect(
+        within(group)
+          .getAllByRole("radio")
+          .map((r) => r.getAttribute("aria-label")),
+      ).toEqual([
+        "Top left",
+        "Top center",
+        "Top right",
+        "Middle left",
+        "Center",
+        "Middle right",
+        "Bottom left",
+        "Bottom center",
+        "Bottom right",
+      ]);
+
+      await user.click(screen.getByRole("radio", { name: "Top left" }));
+
+      expect(currentOptions().watermark?.position).toBe("top_left");
+      expect(
+        within(group)
+          .getAllByRole("radio")
+          .filter((r) => (r as HTMLInputElement).checked),
+      ).toHaveLength(1);
+    });
+
+    it.each([
+      ["Size (% of image width)", "scale_percent", "1", "100", "35"],
+      ["Opacity", "opacity", "1", "100", "70"],
+      ["Margin (% of image width)", "margin_percent", "0", "20", "5"],
+    ] as const)(
+      "%s は範囲つきのスライダーで、数値として store に入る",
+      async (name, key, min, max, value) => {
+        const user = userEvent.setup();
+        renderPanel();
+        await enable(user);
+
+        const slider = screen.getByRole("slider", { name });
+        expect(slider).toHaveAttribute("min", min);
+        expect(slider).toHaveAttribute("max", max);
+
+        fireEvent.change(slider, { target: { value } });
+
+        expect(currentOptions().watermark?.[key]).toBe(Number(value));
+        expect(screen.getByText(`${value}%`)).toBeInTheDocument();
+      },
+    );
+
+    it("詳細を変えても他の設定は保たれる", async () => {
+      const user = userEvent.setup();
+      openDialog.mockResolvedValue("/tmp/logo.png");
+      renderPanel();
+      await enable(user);
+      await user.click(screen.getByRole("button", { name: "Choose PNG..." }));
+
+      fireEvent.change(screen.getByRole("slider", { name: "Opacity" }), {
+        target: { value: "80" },
+      });
+
+      expect(currentOptions().watermark).toMatchObject({
+        path: "/tmp/logo.png",
+        opacity: 80,
+        scale_percent: 20,
+      });
+    });
+
+    it("処理中はすべて無効化される", () => {
+      useAppStore.setState({ processingState: "processing" });
+      renderPanel({
+        watermark: {
+          path: "/tmp/logo.png",
+          position: "center",
+          margin_percent: 2,
+          opacity: 50,
+          scale_percent: 20,
+        },
+      });
+
+      expect(
+        screen.getByRole("checkbox", { name: "Add image watermark" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Choose PNG..." }),
+      ).toBeDisabled();
+      for (const radio of within(
+        screen.getByRole("group", { name: "Position" }),
+      ).getAllByRole("radio")) {
+        expect(radio).toBeDisabled();
+      }
+      expect(screen.getByRole("slider", { name: "Opacity" })).toBeDisabled();
+    });
+
+    it("日本語でもラベルが出る", async () => {
+      await i18n.changeLanguage("ja");
+      renderPanel({
+        watermark: {
+          path: "",
+          position: "center",
+          margin_percent: 2,
+          opacity: 50,
+          scale_percent: 20,
+        },
+      });
+
+      expect(
+        screen.getByRole("checkbox", { name: "画像ウォーターマークを入れる" }),
+      ).toBeChecked();
+      expect(screen.getByRole("radio", { name: "中央" })).toBeChecked();
+      expect(
+        screen.getByRole("slider", { name: "不透明度" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "PNG を選ぶ..." }),
+      ).toBeInTheDocument();
+    });
+  });
+
   describe("出力先フォルダ", () => {
     it("store の outputDir を読み取り専用で表示する", () => {
       useAppStore.setState({ outputDir: "/tmp/out" });

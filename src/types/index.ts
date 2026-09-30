@@ -5,6 +5,27 @@ export type OutputFormat = "jpeg" | "png" | "gif" | "bmp" | "tiff" | "webp";
 // Compression type
 export type CompressionType = "lossy" | "lossless";
 
+// Watermark anchor on a 3x3 grid
+export type WatermarkPosition =
+  | "top_left"
+  | "top_center"
+  | "top_right"
+  | "middle_left"
+  | "center"
+  | "middle_right"
+  | "bottom_left"
+  | "bottom_center"
+  | "bottom_right";
+
+// Image watermark
+export interface ImageWatermark {
+  path: string;
+  position: WatermarkPosition;
+  margin_percent: number;
+  opacity: number;
+  scale_percent: number;
+}
+
 // Processing options
 export interface ProcessingOptions {
   format: OutputFormat;
@@ -13,6 +34,7 @@ export interface ProcessingOptions {
   height: number | null;
   keep_metadata: boolean;
   compression: CompressionType;
+  watermark: ImageWatermark | null;
 }
 
 // Processing result for single image

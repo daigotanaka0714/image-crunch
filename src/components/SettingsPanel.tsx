@@ -2,7 +2,12 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../store/useAppStore";
-import type { CompressionType, OutputFormat } from "../types";
+import type {
+  CompressionType,
+  ImageWatermark,
+  OutputFormat,
+  WatermarkPosition,
+} from "../types";
 import { FolderIcon, SettingsIcon } from "./Icons";
 
 const OUTPUT_FORMATS: OutputFormat[] = [
@@ -13,6 +18,35 @@ const OUTPUT_FORMATS: OutputFormat[] = [
   "bmp",
   "tiff",
 ];
+
+// Row-major order, so the radios render as a 3x3 grid
+const WATERMARK_POSITIONS: WatermarkPosition[] = [
+  "top_left",
+  "top_center",
+  "top_right",
+  "middle_left",
+  "center",
+  "middle_right",
+  "bottom_left",
+  "bottom_center",
+  "bottom_right",
+];
+
+const DEFAULT_WATERMARK: ImageWatermark = {
+  path: "",
+  position: "bottom_right",
+  margin_percent: 2,
+  opacity: 50,
+  scale_percent: 20,
+};
+
+const MAX_WATERMARK_MARGIN = 20;
+
+// Fill the range track up to the current value
+const rangeBackground = (value: number, max: number, min = 0) => {
+  const filled = ((value - min) / (max - min)) * 100;
+  return `linear-gradient(to right, var(--color-primary-500) 0%, var(--color-primary-500) ${filled}%, var(--color-slate-200) ${filled}%, var(--color-slate-200) 100%)`;
+};
 
 export function SettingsPanel() {
   const { t } = useTranslation();
@@ -46,8 +80,36 @@ export function SettingsPanel() {
     }
   };
 
+  const { watermark } = options;
+
+  const handleWatermarkToggle = (enabled: boolean) => {
+    setOptions({ watermark: enabled ? DEFAULT_WATERMARK : null });
+  };
+
+  const updateWatermark = (patch: Partial<ImageWatermark>) => {
+    if (watermark) {
+      setOptions({ watermark: { ...watermark, ...patch } });
+    }
+  };
+
+  const handleSelectWatermark = async () => {
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        filters: [{ name: "PNG", extensions: ["png"] }],
+        title: t("settings.watermarkChoose"),
+      });
+      if (selected && typeof selected === "string") {
+        updateWatermark({ path: selected });
+      }
+    } catch (error) {
+      console.error("Failed to select watermark image:", error);
+    }
+  };
+
   // Calculate slider background based on value
-  const sliderBackground = `linear-gradient(to right, var(--color-primary-500) 0%, var(--color-primary-500) ${options.quality}%, var(--color-slate-200) ${options.quality}%, var(--color-slate-200) 100%)`;
+  const sliderBackground = rangeBackground(options.quality, 100);
 
   return (
     <div className="card divide-y divide-slate-100 animate-slideUp">
@@ -258,6 +320,185 @@ export function SettingsPanel() {
             </label>
           </div>
         </fieldset>
+
+        {/* Watermark */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={watermark !== null}
+              onChange={(e) => handleWatermarkToggle(e.target.checked)}
+              disabled={isProcessing}
+              className="custom-checkbox"
+            />
+            <span className="text-sm font-medium text-slate-600">
+              {t("settings.watermarkEnable")}
+            </span>
+          </label>
+          {watermark && (
+            <div className="space-y-4 animate-fadeIn">
+              <div className="space-y-1">
+                <label
+                  className="text-xs font-medium text-slate-500 block"
+                  htmlFor="settings-watermark-file"
+                >
+                  {t("settings.watermarkImage")}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="settings-watermark-file"
+                    type="text"
+                    value={watermark.path}
+                    disabled={isProcessing}
+                    className="flex-1 min-w-0 custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-600 disabled:opacity-50"
+                    readOnly
+                    placeholder={t("settings.watermarkNoFile")}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSelectWatermark}
+                    disabled={isProcessing}
+                    className={`
+                      px-3 py-2
+                      bg-slate-100 hover:bg-slate-200 border border-slate-200
+                      rounded-xl text-sm font-medium text-slate-700
+                      transition-all duration-200
+                      ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}
+                    `}
+                  >
+                    {t("settings.watermarkChoose")}
+                  </button>
+                </div>
+                {!watermark.path && (
+                  <p className="text-xs text-amber-600">
+                    {t("settings.watermarkRequired")}
+                  </p>
+                )}
+              </div>
+
+              <fieldset className="space-y-1">
+                <legend className="text-xs font-medium text-slate-500">
+                  {t("settings.watermarkPosition")}
+                </legend>
+                <div className="grid grid-cols-3 gap-1 w-24">
+                  {WATERMARK_POSITIONS.map((position) => (
+                    <label
+                      key={position}
+                      className="flex items-center justify-center p-1 cursor-pointer"
+                      title={t(`settings.watermarkPositions.${position}`)}
+                    >
+                      <input
+                        type="radio"
+                        name="watermark-position"
+                        aria-label={t(
+                          `settings.watermarkPositions.${position}`,
+                        )}
+                        checked={watermark.position === position}
+                        onChange={() => updateWatermark({ position })}
+                        disabled={isProcessing}
+                        className="custom-radio"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label
+                    className="text-xs font-medium text-slate-500"
+                    htmlFor="settings-watermark-size"
+                  >
+                    {t("settings.watermarkSize")}
+                  </label>
+                  <span className="text-xs font-bold text-indigo-600">
+                    {watermark.scale_percent}%
+                  </span>
+                </div>
+                <input
+                  id="settings-watermark-size"
+                  type="range"
+                  min="1"
+                  max="100"
+                  value={watermark.scale_percent}
+                  onChange={(e) =>
+                    updateWatermark({
+                      scale_percent: parseInt(e.target.value, 10),
+                    })
+                  }
+                  disabled={isProcessing}
+                  className="w-full disabled:opacity-50"
+                  style={{
+                    background: rangeBackground(watermark.scale_percent, 100),
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label
+                    className="text-xs font-medium text-slate-500"
+                    htmlFor="settings-watermark-opacity"
+                  >
+                    {t("settings.watermarkOpacity")}
+                  </label>
+                  <span className="text-xs font-bold text-indigo-600">
+                    {watermark.opacity}%
+                  </span>
+                </div>
+                <input
+                  id="settings-watermark-opacity"
+                  type="range"
+                  min="1"
+                  max="100"
+                  value={watermark.opacity}
+                  onChange={(e) =>
+                    updateWatermark({ opacity: parseInt(e.target.value, 10) })
+                  }
+                  disabled={isProcessing}
+                  className="w-full disabled:opacity-50"
+                  style={{
+                    background: rangeBackground(watermark.opacity, 100),
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label
+                    className="text-xs font-medium text-slate-500"
+                    htmlFor="settings-watermark-margin"
+                  >
+                    {t("settings.watermarkMargin")}
+                  </label>
+                  <span className="text-xs font-bold text-indigo-600">
+                    {watermark.margin_percent}%
+                  </span>
+                </div>
+                <input
+                  id="settings-watermark-margin"
+                  type="range"
+                  min="0"
+                  max={MAX_WATERMARK_MARGIN}
+                  value={watermark.margin_percent}
+                  onChange={(e) =>
+                    updateWatermark({
+                      margin_percent: parseInt(e.target.value, 10),
+                    })
+                  }
+                  disabled={isProcessing}
+                  className="w-full disabled:opacity-50"
+                  style={{
+                    background: rangeBackground(
+                      watermark.margin_percent,
+                      MAX_WATERMARK_MARGIN,
+                    ),
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Output Directory */}
         <div className="space-y-2">
