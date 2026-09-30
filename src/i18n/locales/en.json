@@ -30,7 +30,22 @@
     "compression": "Compression",
     "lossy": "Lossy",
     "lossless": "Lossless",
-    "watermarkEnable": "Add image watermark",
+    "watermarkEnable": "Add watermark",
+    "watermarkKind": "Type",
+    "watermarkKindText": "Text",
+    "watermarkKindImage": "Image",
+    "watermarkText": "Text",
+    "watermarkTextRequired": "Enter text to start the conversion",
+    "watermarkMissingGlyphs": "This font cannot draw {{chars}}. They will come out as boxes or blanks.",
+    "watermarkFont": "Font",
+    "watermarkFontsLoading": "Loading fonts...",
+    "watermarkFontsError": "Could not load the system fonts",
+    "watermarkFontReplaced": "The saved font \"{{missing}}\" is not installed. Switched to \"{{replacement}}\".",
+    "watermarkColor": "Color",
+    "watermarkOutline": "Outline",
+    "watermarkOutlineColor": "Outline color",
+    "watermarkOutlineWidth": "Outline width (% of font size)",
+    "dismiss": "Dismiss",
     "watermarkImage": "Watermark image (PNG)",
     "watermarkChoose": "Choose PNG...",
     "watermarkNoFile": "No file chosen",
@@ -72,7 +87,8 @@
   "actions": {
     "start": "Start Conversion",
     "cancel": "Cancel",
-    "processing": "Processing..."
+    "processing": "Processing...",
+    "processingProgress": "Processing... {{current}} / {{total}} ({{percent}}%)"
   },
   "errors": {
     "noFiles": "Please add files to process",

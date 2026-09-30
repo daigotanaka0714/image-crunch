@@ -199,6 +199,7 @@ describe("ActionButtons", () => {
       setReady();
       useAppStore.getState().setOptions({
         watermark: {
+          kind: "image",
           path: "",
           position: "bottom_right",
           margin_percent: 2,
@@ -215,6 +216,7 @@ describe("ActionButtons", () => {
       setReady();
       useAppStore.getState().setOptions({
         watermark: {
+          kind: "image",
           path: "/logo.png",
           position: "bottom_right",
           margin_percent: 2,
@@ -226,6 +228,38 @@ describe("ActionButtons", () => {
 
       expect(startButton()).toBeEnabled();
     });
+
+    it.each([
+      ["文字が空", "", "HiraginoSans-W3", false],
+      ["文字が空白だけ", "  ", "HiraginoSans-W3", false],
+      ["フォントが未確定", "© Example", "", false],
+      ["文字とフォントがそろっている", "© Example", "HiraginoSans-W3", true],
+    ])(
+      "文字ウォーターマークで%sなら enabled=%s",
+      (_label, text, font, enabled) => {
+        setReady();
+        useAppStore.getState().setOptions({
+          watermark: {
+            kind: "text",
+            text,
+            font,
+            color: "#ffffff",
+            outline: null,
+            position: "bottom_right",
+            margin_percent: 2,
+            opacity: 50,
+            scale_percent: 20,
+          },
+        });
+        render(<ActionButtons />);
+
+        if (enabled) {
+          expect(startButton()).toBeEnabled();
+        } else {
+          expect(startButton()).toBeDisabled();
+        }
+      },
+    );
 
     it("処理中は無効になり、ラベルが処理中の表示に変わる", () => {
       setReady();
@@ -239,6 +273,71 @@ describe("ActionButtons", () => {
       expect(
         screen.queryByRole("button", { name: i18n.t("actions.start") }),
       ).not.toBeInTheDocument();
+    });
+
+    it("最初の進捗が届くまでは件数も塗りも出さない", () => {
+      setReady();
+      useAppStore.setState({ processingState: "processing", progress: null });
+      render(<ActionButtons />);
+
+      expect(
+        screen.getByRole("button", { name: "Processing..." }),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("progress-fill")).not.toBeInTheDocument();
+    });
+
+    it("処理中はボタンに件数と % を出し、背景を % の分だけ塗る", async () => {
+      setReady([makeFile("/photos/a.png"), makeFile("/photos/b.png")]);
+      await start();
+
+      await emit(
+        "processing-progress",
+        makeProgress({ current: 1, total: 3, percent: 33.3333 }),
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Processing... 1 / 3 (33%)" }),
+      ).toBeDisabled();
+      expect(screen.getByTestId("progress-fill")).toHaveStyle({
+        width: "33.3333%",
+      });
+
+      await emit(
+        "processing-progress",
+        makeProgress({ current: 3, total: 3, percent: 100 }),
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Processing... 3 / 3 (100%)" }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("progress-fill")).toHaveStyle({
+        width: "100%",
+      });
+    });
+
+    it("日本語でも件数と % を出す", async () => {
+      await i18n.changeLanguage("ja");
+      setReady();
+      useAppStore.setState({
+        processingState: "processing",
+        progress: makeProgress({ current: 2, total: 4, percent: 50 }),
+      });
+      render(<ActionButtons />);
+
+      expect(
+        screen.getByRole("button", { name: "処理中... 2 / 4（50%）" }),
+      ).toBeInTheDocument();
+    });
+
+    it("処理が終わると塗りは消える", async () => {
+      setReady();
+      await start();
+      await emit("processing-progress", makeProgress());
+
+      await emit("processing-complete", makeStats());
+
+      expect(screen.queryByTestId("progress-fill")).not.toBeInTheDocument();
+      expect(startButton()).toBeEnabled();
     });
 
     it("無効なときに押しても処理は始まらない", async () => {

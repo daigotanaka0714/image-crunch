@@ -7,6 +7,12 @@ import type {
   ProcessingState,
   ProgressUpdate,
 } from "../types";
+import {
+  initialWatermark,
+  loadSavedWatermark,
+  saveWatermarkSettings,
+  toSaved,
+} from "./watermarkSettings";
 
 interface AppState {
   // Files
@@ -96,7 +102,7 @@ export const useAppStore = create<AppState>((set) => ({
     })),
 
   // Processing options
-  options: defaultOptions,
+  options: { ...defaultOptions, watermark: initialWatermark() },
   setOptions: (newOptions) =>
     set((state) => ({
       options: { ...state.options, ...newOptions },
@@ -132,3 +138,12 @@ export const useAppStore = create<AppState>((set) => ({
       error: null,
     }),
 }));
+
+// Save the watermark settings whenever they change
+useAppStore.subscribe((state, previous) => {
+  if (state.options.watermark !== previous.options.watermark) {
+    saveWatermarkSettings(
+      toSaved(state.options.watermark, loadSavedWatermark()),
+    );
+  }
+});

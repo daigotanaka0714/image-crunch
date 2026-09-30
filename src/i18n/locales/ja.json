@@ -30,7 +30,22 @@
     "compression": "圧縮方式",
     "lossy": "ロッシー",
     "lossless": "ロスレス",
-    "watermarkEnable": "画像ウォーターマークを入れる",
+    "watermarkEnable": "ウォーターマークを入れる",
+    "watermarkKind": "種類",
+    "watermarkKindText": "文字",
+    "watermarkKindImage": "画像",
+    "watermarkText": "文字",
+    "watermarkTextRequired": "変換を始めるには文字を入力してください",
+    "watermarkMissingGlyphs": "このフォントでは {{chars}} を描けません。四角や空白になります。",
+    "watermarkFont": "フォント",
+    "watermarkFontsLoading": "フォントを読み込み中...",
+    "watermarkFontsError": "システムフォントを読み込めませんでした",
+    "watermarkFontReplaced": "保存されていたフォント「{{missing}}」が見つからないため、「{{replacement}}」に切り替えました。",
+    "watermarkColor": "色",
+    "watermarkOutline": "縁取り",
+    "watermarkOutlineColor": "縁取りの色",
+    "watermarkOutlineWidth": "縁取りの太さ（文字サイズに対する %）",
+    "dismiss": "閉じる",
     "watermarkImage": "ウォーターマーク画像（PNG）",
     "watermarkChoose": "PNG を選ぶ...",
     "watermarkNoFile": "ファイル未指定",
@@ -72,7 +87,8 @@
   "actions": {
     "start": "変換開始",
     "cancel": "キャンセル",
-    "processing": "処理中..."
+    "processing": "処理中...",
+    "processingProgress": "処理中... {{current}} / {{total}}（{{percent}}%）"
   },
   "errors": {
     "noFiles": "処理するファイルを追加してください",
