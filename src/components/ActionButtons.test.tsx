@@ -195,6 +195,38 @@ describe("ActionButtons", () => {
       expect(startButton()).toBeEnabled();
     });
 
+    it("ウォーターマークが有効で画像が未指定なら無効", () => {
+      setReady();
+      useAppStore.getState().setOptions({
+        watermark: {
+          path: "",
+          position: "bottom_right",
+          margin_percent: 2,
+          opacity: 50,
+          scale_percent: 20,
+        },
+      });
+      render(<ActionButtons />);
+
+      expect(startButton()).toBeDisabled();
+    });
+
+    it("ウォーターマーク画像を指定すれば有効になる", () => {
+      setReady();
+      useAppStore.getState().setOptions({
+        watermark: {
+          path: "/logo.png",
+          position: "bottom_right",
+          margin_percent: 2,
+          opacity: 50,
+          scale_percent: 20,
+        },
+      });
+      render(<ActionButtons />);
+
+      expect(startButton()).toBeEnabled();
+    });
+
     it("処理中は無効になり、ラベルが処理中の表示に変わる", () => {
       setReady();
       useAppStore.setState({ processingState: "processing" });

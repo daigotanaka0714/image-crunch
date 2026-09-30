@@ -27,7 +27,10 @@ export function ActionButtons() {
   } = useAppStore();
 
   const isProcessing = processingState === "processing";
-  const canStart = files.length > 0 && outputDir && !isProcessing;
+  // ウォーターマークを有効にしたまま画像が未指定だと、全ファイルが失敗する
+  const watermarkReady = options.watermark === null || !!options.watermark.path;
+  const canStart =
+    files.length > 0 && outputDir && watermarkReady && !isProcessing;
 
   // 実行ごとの通し番号。開始で 1 つ進み、キャンセルでも 1 つ進む。
   // 各ハンドラは自分が始まったときの番号を覚えていて、番号がずれたら

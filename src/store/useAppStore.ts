@@ -56,6 +56,7 @@ const defaultOptions: ProcessingOptions = {
   height: null,
   keep_metadata: false,
   compression: "lossy",
+  watermark: null,
 };
 
 export const useAppStore = create<AppState>((set) => ({
