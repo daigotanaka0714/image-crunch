@@ -2,6 +2,10 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
+import {
+  INCLUDE_SUBFOLDERS_STORAGE_KEY,
+  loadIncludeSubfolders,
+} from "../store/includeSubfolders";
 import { useAppStore } from "../store/useAppStore";
 import { DropZone } from "./DropZone";
 
@@ -37,6 +41,7 @@ const initialState = useAppStore.getState();
 
 beforeEach(async () => {
   useAppStore.setState(initialState, true);
+  localStorage.clear();
   await i18n.changeLanguage("en");
 
   vi.clearAllMocks();
@@ -192,6 +197,7 @@ describe("DropZone", () => {
 
       expect(invoke).toHaveBeenCalledWith("get_image_files", {
         paths: ["/photos", "/photos/a.png"],
+        includeSubfolders: false,
       });
     });
 
@@ -304,6 +310,7 @@ describe("DropZone", () => {
 
       expect(invoke).toHaveBeenCalledWith("get_image_files", {
         paths: ["/photos/a.png", "/photos/b.jpg"],
+        includeSubfolders: false,
       });
       expect(filePaths()).toEqual(["/photos/a.png", "/photos/b.jpg"]);
     });
@@ -318,6 +325,7 @@ describe("DropZone", () => {
 
       expect(invoke).toHaveBeenCalledWith("get_image_files", {
         paths: ["/photos/a.png"],
+        includeSubfolders: false,
       });
     });
 
@@ -367,6 +375,7 @@ describe("DropZone", () => {
 
       expect(invoke).toHaveBeenCalledWith("get_image_files", {
         paths: ["/photos"],
+        includeSubfolders: false,
       });
       expect(filePaths()).toEqual(["/photos/a.png", "/photos/b.jpg"]);
     });
@@ -379,6 +388,104 @@ describe("DropZone", () => {
       await user.click(screen.getByRole("button", { name: /Select Folder/ }));
 
       expect(invoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("サブフォルダ", () => {
+    const checkbox = () =>
+      screen.getByRole("checkbox", { name: "Include subfolders" });
+
+    it("既定はオフで、get_image_files に false を渡す", async () => {
+      const user = userEvent.setup();
+      open.mockResolvedValue("/photos");
+      await renderDropZone();
+
+      expect(checkbox()).not.toBeChecked();
+      await user.click(screen.getByRole("button", { name: /Select Folder/ }));
+
+      expect(invoke).toHaveBeenCalledWith("get_image_files", {
+        paths: ["/photos"],
+        includeSubfolders: false,
+      });
+    });
+
+    it("オンにするとフォルダ選択で true を渡す", async () => {
+      const user = userEvent.setup();
+      open.mockResolvedValue("/photos");
+      await renderDropZone();
+
+      await user.click(checkbox());
+      await user.click(screen.getByRole("button", { name: /Select Folder/ }));
+
+      expect(invoke).toHaveBeenCalledWith("get_image_files", {
+        paths: ["/photos"],
+        includeSubfolders: true,
+      });
+    });
+
+    it("オンのときはドロップでも true を渡す", async () => {
+      useAppStore.setState({ includeSubfolders: true });
+      const { emit } = await renderDropZone();
+
+      await emit({ type: "drop", paths: ["/more"] });
+
+      expect(invoke).toHaveBeenCalledWith("get_image_files", {
+        paths: ["/more"],
+        includeSubfolders: true,
+      });
+    });
+
+    it("切り替えるとドラッグ＆ドロップの購読を張り直し、古い購読は解除する", async () => {
+      const user = userEvent.setup();
+      await renderDropZone();
+      const before = onDragDropEvent.mock.calls.length;
+
+      await user.click(checkbox());
+      await act(async () => {});
+
+      expect(onDragDropEvent.mock.calls.length).toBe(before + 1);
+      expect(unlisten).toHaveBeenCalled();
+    });
+
+    it("切り替えるとファイルを選び直さなくても保存される", async () => {
+      const user = userEvent.setup();
+      await renderDropZone();
+
+      await user.click(checkbox());
+
+      expect(useAppStore.getState().includeSubfolders).toBe(true);
+      expect(localStorage.getItem(INCLUDE_SUBFOLDERS_STORAGE_KEY)).toBe("true");
+      expect(invoke).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [null, false],
+      ["true", true],
+      ["false", false],
+      ['"yes"', false],
+      ["{broken", false],
+    ])("保存値 %s は %s として読む", (stored, expected) => {
+      if (stored !== null) {
+        localStorage.setItem(INCLUDE_SUBFOLDERS_STORAGE_KEY, stored);
+      }
+
+      expect(loadIncludeSubfolders()).toBe(expected);
+    });
+
+    it("処理中は切り替えられない", async () => {
+      useAppStore.setState({ processingState: "processing" });
+      await renderDropZone();
+
+      expect(checkbox()).toBeDisabled();
+    });
+
+    it("日本語でもラベルが出る", async () => {
+      await i18n.changeLanguage("ja");
+      await renderDropZone();
+
+      expect(
+        screen.getByRole("checkbox", { name: "サブフォルダも含める" }),
+      ).toBeInTheDocument();
     });
   });
 

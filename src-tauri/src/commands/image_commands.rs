@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -72,9 +73,17 @@ where
     }
 }
 
-/// Get list of image files from paths (supports files and directories)
+/// Get list of image files from paths (supports files and directories).
+///
+/// A directory contributes the images directly inside it, and with
+/// `include_subfolders` also those in every folder below it. Symbolic links
+/// to folders are not followed. Entries are sorted by name within each
+/// directory.
 #[tauri::command]
-pub fn get_image_files(paths: Vec<String>) -> Result<Vec<String>, String> {
+pub fn get_image_files(
+    paths: Vec<String>,
+    include_subfolders: bool,
+) -> Result<Vec<String>, String> {
     let mut image_files = Vec::new();
 
     for path_str in paths {
@@ -87,9 +96,11 @@ pub fn get_image_files(paths: Vec<String>) -> Result<Vec<String>, String> {
                 }
             }
         } else if path.is_dir() {
-            // Recursively walk directory
+            let max_depth = if include_subfolders { usize::MAX } else { 1 };
             for entry in WalkDir::new(path)
-                .follow_links(true)
+                .follow_links(false)
+                .max_depth(max_depth)
+                .sort_by_file_name()
                 .into_iter()
                 .filter_map(|e| e.ok())
             {
@@ -106,6 +117,46 @@ pub fn get_image_files(paths: Vec<String>) -> Result<Vec<String>, String> {
     }
 
     Ok(image_files)
+}
+
+/// Output file name for each input: its file stem plus `extension`.
+///
+/// Names that would clash get "-2", "-3", ... appended, in input order.
+/// Plain names are handed out first, so an input whose own stem is
+/// "photo-2" keeps it. Names are compared case-insensitively, as on the
+/// default macOS and Windows file systems. Only names within the batch are
+/// checked: running the same batch again overwrites its previous outputs.
+fn output_file_names(input_paths: &[String], extension: &str) -> Vec<String> {
+    let stems: Vec<String> = input_paths
+        .iter()
+        .enumerate()
+        .map(|(index, input)| {
+            Path::new(input)
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| format!("image_{}", index))
+        })
+        .collect();
+
+    let mut taken = HashSet::new();
+    let mut names: Vec<Option<String>> = stems
+        .iter()
+        .map(|stem| {
+            let name = format!("{}.{}", stem, extension);
+            taken.insert(name.to_lowercase()).then_some(name)
+        })
+        .collect();
+
+    for (name, stem) in names.iter_mut().zip(&stems) {
+        if name.is_none() {
+            let numbered = (2..)
+                .map(|n| format!("{}-{}.{}", stem, n, extension))
+                .find(|candidate| taken.insert(candidate.to_lowercase()));
+            *name = numbered;
+        }
+    }
+
+    names.into_iter().flatten().collect()
 }
 
 /// Process a single image
@@ -178,6 +229,10 @@ fn process_batch_with<E: EventEmitter + Sync>(
         .build()
         .map_err(|e| format!("Failed to create thread pool: {}", e))?;
 
+    // Decided before the parallel part so that clashing names are numbered
+    // in input order
+    let output_names = output_file_names(&input_paths, options.format.extension());
+
     // Use atomic counter for accurate progress tracking across threads
     let processed_count = Arc::new(AtomicUsize::new(0));
 
@@ -188,13 +243,7 @@ fn process_batch_with<E: EventEmitter + Sync>(
             .enumerate()
             .map(|(index, input_path)| {
                 let input = Path::new(input_path);
-                let file_stem = input
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| format!("image_{}", index));
-
-                let output_path =
-                    output_dir_path.join(format!("{}.{}", file_stem, options.format.extension()));
+                let output_path = output_dir_path.join(&output_names[index]);
 
                 // Process the image
                 let result = match ImageProcessor::process_image(input, &output_path, &options) {
@@ -464,6 +513,179 @@ mod tests {
             );
         }
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// root/a.png, root/b.txt, root/sub/c.png, root/sub/deeper/d.jpg
+    fn folder_tree(name: &str) -> PathBuf {
+        let root = scratch_dir(name);
+        let deeper = root.join("sub").join("deeper");
+        std::fs::create_dir_all(&deeper).expect("failed to create tree");
+        write_png(&root, "a.png");
+        std::fs::write(root.join("b.txt"), "not an image").unwrap();
+        write_png(&root.join("sub"), "c.png");
+        image::RgbImage::from_pixel(8, 8, image::Rgb([12, 34, 56]))
+            .save(deeper.join("d.jpg"))
+            .expect("failed to write test jpeg");
+        root
+    }
+
+    fn names(paths: &[String]) -> Vec<String> {
+        paths
+            .iter()
+            .map(|p| {
+                Path::new(p)
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn folder_contributes_only_its_own_images_by_default() {
+        let root = folder_tree("folder-top-only");
+
+        let files = get_image_files(vec![root.to_string_lossy().to_string()], false).unwrap();
+
+        assert_eq!(names(&files), vec!["a.png"]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn subfolders_are_included_on_request() {
+        let root = folder_tree("folder-recursive");
+
+        let files = get_image_files(vec![root.to_string_lossy().to_string()], true).unwrap();
+
+        assert_eq!(names(&files), vec!["a.png", "c.png", "d.jpg"]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn files_given_directly_are_kept_either_way() {
+        let root = folder_tree("folder-direct-files");
+        let direct = vec![
+            root.join("sub").join("c.png").to_string_lossy().to_string(),
+            root.join("b.txt").to_string_lossy().to_string(),
+        ];
+
+        for include_subfolders in [false, true] {
+            let files = get_image_files(direct.clone(), include_subfolders).unwrap();
+            assert_eq!(names(&files), vec!["c.png"]);
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symbolic_links_to_folders_are_not_followed() {
+        let root = folder_tree("folder-symlink");
+        let elsewhere = scratch_dir("folder-symlink-target");
+        write_png(&elsewhere, "e.png");
+        std::os::unix::fs::symlink(&elsewhere, root.join("link")).unwrap();
+        // A loop back to the root
+        std::os::unix::fs::symlink(&root, root.join("sub").join("loop")).unwrap();
+
+        let files = get_image_files(vec![root.to_string_lossy().to_string()], true).unwrap();
+
+        assert_eq!(names(&files), vec!["a.png", "c.png", "d.jpg"]);
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&elsewhere);
+    }
+
+    fn strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|v| v.to_string()).collect()
+    }
+
+    #[test]
+    fn distinct_names_are_left_alone() {
+        assert_eq!(
+            output_file_names(&strings(&["/a/one.png", "/b/two.jpg"]), "webp"),
+            strings(&["one.webp", "two.webp"])
+        );
+    }
+
+    #[test]
+    fn clashing_names_are_numbered_in_input_order() {
+        assert_eq!(
+            output_file_names(
+                &strings(&["/a/photo.jpg", "/b/photo.jpg", "/a/photo.png"]),
+                "webp"
+            ),
+            strings(&["photo.webp", "photo-2.webp", "photo-3.webp"])
+        );
+    }
+
+    #[test]
+    fn names_differing_only_in_case_clash() {
+        assert_eq!(
+            output_file_names(&strings(&["/a/Photo.jpg", "/b/photo.png"]), "webp"),
+            strings(&["Photo.webp", "photo-2.webp"])
+        );
+    }
+
+    #[test]
+    fn an_input_already_named_like_a_number_keeps_its_name() {
+        assert_eq!(
+            output_file_names(
+                &strings(&["/a/photo.jpg", "/a/photo.png", "/a/photo-2.jpg"]),
+                "webp"
+            ),
+            strings(&["photo.webp", "photo-3.webp", "photo-2.webp"])
+        );
+    }
+
+    #[test]
+    fn same_named_files_in_different_folders_are_all_written() {
+        let dir = scratch_dir("batch-same-names");
+        let (first, second) = (dir.join("A"), dir.join("B"));
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        let inputs = vec![
+            write_png(&first, "photo.png"),
+            write_png(&second, "photo.png"),
+        ];
+        let output_dir = dir.join("output");
+        let results = Mutex::new(Vec::new());
+
+        struct RecordingEmitter<'a>(&'a Mutex<Vec<ProcessingResult>>);
+        impl EventEmitter for RecordingEmitter<'_> {
+            fn emit_event<S: Serialize + Clone>(
+                &self,
+                event: &str,
+                payload: S,
+            ) -> Result<(), String> {
+                if event == "processing-result" {
+                    let value = serde_json::to_value(payload).unwrap();
+                    self.0
+                        .lock()
+                        .unwrap()
+                        .push(serde_json::from_value(value).unwrap());
+                }
+                Ok(())
+            }
+        }
+
+        let stats = process_batch_with(
+            &RecordingEmitter(&results),
+            inputs.clone(),
+            output_dir.to_string_lossy().to_string(),
+            ProcessingOptions::default(),
+            &|_| {},
+        )
+        .unwrap();
+
+        assert_eq!(stats.successful_files, 2);
+        assert!(output_dir.join("photo.webp").exists());
+        assert!(output_dir.join("photo-2.webp").exists());
+        let mut results = results.into_inner().unwrap();
+        results.sort_by(|a, b| a.original_path.cmp(&b.original_path));
+        assert_eq!(results[0].original_path, inputs[0]);
+        assert!(results[0].output_path.ends_with("photo.webp"));
+        assert_eq!(results[1].original_path, inputs[1]);
+        assert!(results[1].output_path.ends_with("photo-2.webp"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
