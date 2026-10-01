@@ -13,11 +13,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        .manage(image::preview::PreviewCache::default())
         .invoke_handler(tauri::generate_handler![
             image_commands::get_image_files,
             image_commands::process_single_image,
             image_commands::process_batch,
             image_commands::get_image_info,
+            image_commands::render_preview,
             font_commands::list_fonts,
             font_commands::find_missing_glyphs,
             update_commands::check_for_updates,

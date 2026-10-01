@@ -19,6 +19,7 @@ import type {
   WatermarkTile,
 } from "../types";
 import { FolderIcon, SettingsIcon, XIcon } from "./Icons";
+import { WatermarkPreview } from "./WatermarkPreview";
 
 const OUTPUT_FORMATS: OutputFormat[] = [
   "webp",
@@ -410,6 +411,8 @@ export function SettingsPanel() {
           )}
           {watermark && (
             <div className="space-y-4 animate-fadeIn">
+              <WatermarkPreview />
+
               <fieldset className="space-y-1">
                 <legend className="text-xs font-medium text-slate-500">
                   {t("settings.watermarkKind")}

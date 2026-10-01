@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useAppStore } from "../store/useAppStore";
+import { previewTarget, useAppStore } from "../store/useAppStore";
 import type { FileStatus } from "../types";
 import {
   AlertCircleIcon,
@@ -25,7 +25,15 @@ function StatusIcon({ status }: { status: FileStatus }) {
 
 export function FileList() {
   const { t } = useTranslation();
-  const { files, removeFile, clearFiles, processingState } = useAppStore();
+  const {
+    files,
+    removeFile,
+    clearFiles,
+    processingState,
+    selectedPath,
+    selectFile,
+    options,
+  } = useAppStore();
 
   if (files.length === 0) {
     return null;
@@ -34,6 +42,11 @@ export function FileList() {
   const isProcessing = processingState === "processing";
   const completedCount = files.filter((f) => f.status === "completed").length;
   const errorCount = files.filter((f) => f.status === "error").length;
+  // The selection only matters to the watermark preview
+  const previewPath =
+    options.watermark !== null
+      ? previewTarget(files, selectedPath)?.path
+      : null;
 
   return (
     <div className="card p-4 animate-slideUp">
@@ -80,6 +93,7 @@ export function FileList() {
             key={file.path}
             className={`
               flex items-center gap-2.5 py-2.5 px-3 rounded-xl text-sm group transition-all duration-200
+              ${file.path === previewPath ? "ring-2 ring-indigo-300" : ""}
               ${file.status === "completed" ? "bg-emerald-50/80 hover:bg-emerald-100/80" : ""}
               ${file.status === "error" ? "bg-rose-50/80 hover:bg-rose-100/80" : ""}
               ${file.status === "pending" || file.status === "processing" ? "bg-slate-50/80 hover:bg-slate-100" : ""}
@@ -103,7 +117,12 @@ export function FileList() {
             </div>
 
             {/* File info */}
-            <div className="flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => selectFile(file.path)}
+              aria-pressed={file.path === previewPath}
+              className="flex-1 min-w-0 text-left"
+            >
               <span
                 className={`
                 truncate block font-medium
@@ -130,7 +149,7 @@ export function FileList() {
                   {file.error}
                 </span>
               )}
-            </div>
+            </button>
 
             {/* Remove button - only show for pending files */}
             {file.status === "pending" && (

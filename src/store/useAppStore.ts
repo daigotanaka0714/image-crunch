@@ -31,6 +31,10 @@ interface AppState {
   ) => void;
   resetFileStatuses: () => void;
 
+  // File chosen in the list for the watermark preview (null = the first)
+  selectedPath: string | null;
+  selectFile: (path: string | null) => void;
+
   // Processing options
   options: ProcessingOptions;
   setOptions: (options: Partial<ProcessingOptions>) => void;
@@ -88,9 +92,15 @@ export const useAppStore = create<AppState>((set) => ({
   removeFile: (path) =>
     set((state) => ({
       files: state.files.filter((f) => f.path !== path),
+      selectedPath: state.selectedPath === path ? null : state.selectedPath,
     })),
   clearFiles: () =>
-    set({ files: [], batchStats: null, processingState: "idle" }),
+    set({
+      files: [],
+      selectedPath: null,
+      batchStats: null,
+      processingState: "idle",
+    }),
   updateFileStatus: (path, status, result) =>
     set((state) => ({
       files: state.files.map((f) =>
@@ -108,6 +118,9 @@ export const useAppStore = create<AppState>((set) => ({
         error: undefined,
       })),
     })),
+
+  selectedPath: null,
+  selectFile: (selectedPath) => set({ selectedPath }),
 
   // Processing options
   options: { ...defaultOptions, watermark: initialWatermark() },
@@ -143,12 +156,21 @@ export const useAppStore = create<AppState>((set) => ({
   reset: () =>
     set({
       files: [],
+      selectedPath: null,
       processingState: "idle",
       progress: null,
       batchStats: null,
       error: null,
     }),
 }));
+
+// File the watermark preview shows: the selected one, or the first
+export function previewTarget(
+  files: FileItem[],
+  selectedPath: string | null,
+): FileItem | null {
+  return files.find((f) => f.path === selectedPath) ?? files[0] ?? null;
+}
 
 // Save the watermark settings whenever they change
 useAppStore.subscribe((state, previous) => {

@@ -5,11 +5,13 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::ipc::Response;
+use tauri::{AppHandle, Emitter, Manager};
 use walkdir::WalkDir;
 
 use crate::image::formats::InputFormat;
-use crate::image::processor::{ImageProcessor, ProcessingOptions, ProcessingResult};
+use crate::image::preview::{self, PreviewCache};
+use crate::image::processor::{ImageProcessor, ProcessingOptions, ProcessingResult, Watermark};
 
 /// Batch processing statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -366,6 +368,34 @@ pub fn get_image_info(path: String) -> Result<ImageInfo, String> {
             .map(|e| e.to_string_lossy().to_string())
             .unwrap_or_default(),
     })
+}
+
+/// Render `path` as the conversion with this resize and watermark would, at
+/// most `max_side` px on the longest side, and return it as PNG bytes
+#[tauri::command]
+pub async fn render_preview(
+    app: AppHandle,
+    path: String,
+    width: Option<u32>,
+    height: Option<u32>,
+    watermark: Option<Watermark>,
+    max_side: u32,
+) -> Result<Response, String> {
+    let options = ProcessingOptions {
+        width,
+        height,
+        watermark,
+        ..ProcessingOptions::default()
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let cache = app.state::<PreviewCache>();
+        preview::render(&cache, Path::new(&path), &options, max_side)
+            .and_then(|image| preview::encode_png(&image))
+            .map(Response::new)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Image information

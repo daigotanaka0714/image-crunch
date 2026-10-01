@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { FileItem } from "../types";
-import { useAppStore } from "./useAppStore";
+import { previewTarget, useAppStore } from "./useAppStore";
 
 function makeFile(path: string, overrides: Partial<FileItem> = {}): FileItem {
   return {
@@ -53,6 +53,41 @@ describe("useAppStore", () => {
       useAppStore.getState().addFiles([makeFile("/a.png")]);
       useAppStore.getState().removeFile("/zzz.png");
       expect(useAppStore.getState().files).toHaveLength(1);
+    });
+  });
+
+  describe("プレビューの対象ファイル", () => {
+    const files = [makeFile("/a.png"), makeFile("/b.png")];
+
+    it("選んだファイルを返し、選択が無ければ先頭を返す", () => {
+      expect(previewTarget(files, "/b.png")?.path).toBe("/b.png");
+      expect(previewTarget(files, null)?.path).toBe("/a.png");
+      expect(previewTarget(files, "/gone.png")?.path).toBe("/a.png");
+      expect(previewTarget([], null)).toBeNull();
+    });
+
+    it("選んだファイルを消すと選択も外れ、他を消しても残る", () => {
+      const { addFiles, selectFile, removeFile } = useAppStore.getState();
+      addFiles([...files, makeFile("/c.png")]);
+      selectFile("/b.png");
+
+      removeFile("/c.png");
+      expect(useAppStore.getState().selectedPath).toBe("/b.png");
+
+      removeFile("/b.png");
+      expect(useAppStore.getState().selectedPath).toBeNull();
+    });
+
+    it("すべてクリアと reset で選択が外れる", () => {
+      useAppStore.getState().addFiles(files);
+      useAppStore.getState().selectFile("/b.png");
+      useAppStore.getState().clearFiles();
+      expect(useAppStore.getState().selectedPath).toBeNull();
+
+      useAppStore.getState().addFiles(files);
+      useAppStore.getState().selectFile("/b.png");
+      useAppStore.getState().reset();
+      expect(useAppStore.getState().selectedPath).toBeNull();
     });
   });
 
