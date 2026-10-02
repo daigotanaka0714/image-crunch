@@ -71,6 +71,11 @@
     "watermarkSize": "Size (% of image width)",
     "watermarkOpacity": "Opacity",
     "watermarkMargin": "Margin (% of image width)",
+    "watermarkPreview": "Preview",
+    "watermarkPreviewAlt": "{{name}} with the watermark",
+    "watermarkPreviewNoFiles": "Add images to see a preview",
+    "watermarkPreviewHint": "Click a file in the list to preview it",
+    "watermarkPreviewError": "Could not draw the preview: {{error}}",
     "outputDir": "Output Directory",
     "selectDir": "Select..."
   },

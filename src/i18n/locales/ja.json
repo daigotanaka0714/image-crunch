@@ -71,6 +71,11 @@
     "watermarkSize": "サイズ（画像の幅に対する %）",
     "watermarkOpacity": "不透明度",
     "watermarkMargin": "余白（画像の幅に対する %）",
+    "watermarkPreview": "プレビュー",
+    "watermarkPreviewAlt": "ウォーターマークを入れた {{name}}",
+    "watermarkPreviewNoFiles": "画像を追加するとプレビューが出ます",
+    "watermarkPreviewHint": "一覧のファイルをクリックするとそのファイルでプレビューします",
+    "watermarkPreviewError": "プレビューを描けませんでした: {{error}}",
     "outputDir": "出力先フォルダ",
     "selectDir": "選択..."
   },

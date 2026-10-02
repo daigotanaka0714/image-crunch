@@ -191,11 +191,7 @@ impl ImageProcessor {
         let img = Self::apply_resize(img, options);
 
         // Apply watermark if specified
-        let img = match &options.watermark {
-            Some(Watermark::Image(watermark)) => Self::apply_watermark(img, watermark)?,
-            Some(Watermark::Text(watermark)) => Self::apply_text_watermark(img, watermark)?,
-            None => img,
-        };
+        let img = Self::draw_watermark(img, options.watermark.as_ref())?;
 
         // Save with specified format
         Self::save_image(&img, output_path, options)?;
@@ -225,19 +221,42 @@ impl ImageProcessor {
 
     /// Apply resize transformation
     fn apply_resize(img: DynamicImage, options: &ProcessingOptions) -> DynamicImage {
+        if options.width.is_none() && options.height.is_none() {
+            return img;
+        }
+        let (width, height) = Self::output_dimensions(img.width(), img.height(), options);
+        img.resize_exact(width, height, image::imageops::FilterType::Lanczos3)
+    }
+
+    /// Size of the output image for an input of `width` x `height`
+    pub(crate) fn output_dimensions(
+        width: u32,
+        height: u32,
+        options: &ProcessingOptions,
+    ) -> (u32, u32) {
         match (options.width, options.height) {
-            (Some(w), Some(h)) => img.resize_exact(w, h, image::imageops::FilterType::Lanczos3),
+            (Some(w), Some(h)) => (w, h),
             (Some(w), None) => {
-                let ratio = w as f64 / img.width() as f64;
-                let h = (img.height() as f64 * ratio) as u32;
-                img.resize_exact(w, h, image::imageops::FilterType::Lanczos3)
+                let ratio = w as f64 / width as f64;
+                (w, (height as f64 * ratio) as u32)
             }
             (None, Some(h)) => {
-                let ratio = h as f64 / img.height() as f64;
-                let w = (img.width() as f64 * ratio) as u32;
-                img.resize_exact(w, h, image::imageops::FilterType::Lanczos3)
+                let ratio = h as f64 / height as f64;
+                ((width as f64 * ratio) as u32, h)
             }
-            (None, None) => img,
+            (None, None) => (width, height),
+        }
+    }
+
+    /// Draw `watermark` over the image, or return it unchanged for `None`
+    pub(crate) fn draw_watermark(
+        img: DynamicImage,
+        watermark: Option<&Watermark>,
+    ) -> Result<DynamicImage, ProcessError> {
+        match watermark {
+            Some(Watermark::Image(watermark)) => Self::apply_watermark(img, watermark),
+            Some(Watermark::Text(watermark)) => Self::apply_text_watermark(img, watermark),
+            None => Ok(img),
         }
     }
 

@@ -99,6 +99,62 @@ describe("FileList", () => {
     });
   });
 
+  describe("プレビューするファイルの選択", () => {
+    const watermarkOn = () =>
+      useAppStore.getState().setOptions({
+        watermark: {
+          kind: "image",
+          path: "/logo.png",
+          position: "center",
+          margin_percent: 0,
+          opacity: 50,
+          scale_percent: 20,
+          tile: null,
+        },
+      });
+
+    it("クリックしたファイルが選ばれる", async () => {
+      const user = userEvent.setup();
+      watermarkOn();
+      setFiles([makeFile("/photos/a.png"), makeFile("/photos/b.jpg")]);
+      render(<FileList />);
+
+      await user.click(screen.getByRole("button", { name: "b.jpg" }));
+
+      expect(useAppStore.getState().selectedPath).toBe("/photos/b.jpg");
+      expect(screen.getByRole("button", { name: "b.jpg" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      expect(screen.getByRole("button", { name: "a.png" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    });
+
+    it("選択が無ければ先頭のファイルが選ばれている", () => {
+      watermarkOn();
+      setFiles([makeFile("/photos/a.png"), makeFile("/photos/b.jpg")]);
+      render(<FileList />);
+
+      expect(screen.getByRole("button", { name: "a.png" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
+
+    it("ウォーターマークが無ければどれも選ばれていない", () => {
+      useAppStore.getState().setOptions({ watermark: null });
+      setFiles([makeFile("/photos/a.png")]);
+      render(<FileList />);
+
+      expect(screen.getByRole("button", { name: "a.png" })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    });
+  });
+
   describe("すべてクリア", () => {
     it("クリックすると全ファイルが消える", async () => {
       const user = userEvent.setup();
