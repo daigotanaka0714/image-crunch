@@ -54,13 +54,12 @@ function App() {
           </div>
         )}
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Main Content: two columns from the minimum window width (800px) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Column */}
           <div className="space-y-6">
             <DropZone />
             <FileList />
-            <ResultsPanel />
           </div>
 
           {/* Right Column */}
@@ -69,8 +68,12 @@ function App() {
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <ActionButtons />
+        <ResultsPanel />
+
+        {/* Overall progress is on the start button, so it stays in view */}
+        <div className="sticky bottom-4 z-10">
+          <ActionButtons />
+        </div>
       </div>
     </div>
   );

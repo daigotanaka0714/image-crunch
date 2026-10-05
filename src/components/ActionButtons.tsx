@@ -8,6 +8,7 @@ import {
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useAppStore } from "../store/useAppStore";
+import { isWatermarkReady } from "../store/watermarkSettings";
 import type { BatchStats, ProcessingResult, ProgressUpdate } from "../types";
 import { PlayIcon, SpinnerIcon, XIcon } from "./Icons";
 
@@ -24,6 +25,7 @@ export function ActionButtons() {
     setBatchStats,
     setError,
     updateFileStatus,
+    markFileProcessing,
     resetFileStatuses,
   } = useAppStore();
 
@@ -33,16 +35,11 @@ export function ActionButtons() {
   const progressPercent = shownProgress
     ? Math.min(100, Math.max(0, shownProgress.percent))
     : 0;
-  // ウォーターマークを有効にしたまま画像・文字・フォントが未指定だと、
-  // 全ファイルが失敗するか何も描かれない
-  const { watermark } = options;
-  const watermarkReady =
-    watermark === null ||
-    (watermark.kind === "image"
-      ? !!watermark.path
-      : !!watermark.text.trim() && !!watermark.font);
   const canStart =
-    files.length > 0 && outputDir && watermarkReady && !isProcessing;
+    files.length > 0 &&
+    outputDir &&
+    isWatermarkReady(options.watermark) &&
+    !isProcessing;
 
   // 実行ごとの通し番号。開始で 1 つ進み、キャンセルでも 1 つ進む。
   // 各ハンドラは自分が始まったときの番号を覚えていて、番号がずれたら
@@ -98,14 +95,20 @@ export function ActionButtons() {
     setBatchStats(null);
     resetFileStatuses();
 
-    // Listen for progress updates
+    const unlistenStarted = await listen<string>(
+      "processing-started",
+      (event) => {
+        if (!isCurrentRun()) return;
+        markFileProcessing(event.payload);
+      },
+    );
+
+    // Sent after each file finishes; drives the overall progress only
     const unlistenProgress = await listen<ProgressUpdate>(
       "processing-progress",
       (event) => {
         if (!isCurrentRun()) return;
         setProgress(event.payload);
-        // Update current file status to processing
-        updateFileStatus(event.payload.current_file, "processing");
       },
     );
 
@@ -158,6 +161,7 @@ export function ActionButtons() {
     const unsubscribe = () => {
       if (unsubscribed) return;
       unsubscribed = true;
+      unlistenStarted();
       unlistenProgress();
       unlistenResult();
       unlistenComplete();

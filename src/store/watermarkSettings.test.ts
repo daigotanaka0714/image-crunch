@@ -3,6 +3,7 @@ import type { TextWatermark } from "../types";
 import {
   DEFAULT_SAVED_WATERMARK,
   fromSaved,
+  isWatermarkReady,
   loadSavedWatermark,
   type SavedWatermark,
   sanitizeSavedWatermark,
@@ -182,5 +183,44 @@ describe("toSaved / fromSaved", () => {
     const previous = toSaved(text, DEFAULT_SAVED_WATERMARK);
 
     expect(toSaved(null, previous)).toEqual({ ...previous, enabled: false });
+  });
+});
+
+describe("isWatermarkReady", () => {
+  const text: TextWatermark = {
+    kind: "text",
+    text: "© Example",
+    font: "Helvetica",
+    color: "#ffffff",
+    outline: null,
+    position: "center",
+    margin_percent: 2,
+    opacity: 50,
+    scale_percent: 20,
+    tile: null,
+  };
+
+  it("オフなら準備できている", () => {
+    expect(isWatermarkReady(null)).toBe(true);
+  });
+
+  it("文字は空白以外の文字とフォントが要る", () => {
+    expect(isWatermarkReady(text)).toBe(true);
+    expect(isWatermarkReady({ ...text, text: "  " })).toBe(false);
+    expect(isWatermarkReady({ ...text, font: "" })).toBe(false);
+  });
+
+  it("画像はパスが要る", () => {
+    const image = {
+      kind: "image" as const,
+      path: "",
+      position: "center" as const,
+      margin_percent: 2,
+      opacity: 50,
+      scale_percent: 20,
+      tile: null,
+    };
+    expect(isWatermarkReady(image)).toBe(false);
+    expect(isWatermarkReady({ ...image, path: "/logo.png" })).toBe(true);
   });
 });

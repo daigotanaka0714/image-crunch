@@ -19,6 +19,10 @@
   },
   "settings": {
     "title": "設定",
+    "tabBasic": "基本",
+    "tabWatermark": "ウォーターマーク",
+    "tabWatermarkOn": "オン",
+    "tabWatermarkIncomplete": "未入力あり",
     "format": "出力形式",
     "quality": "品質",
     "resize": "リサイズ",
@@ -87,7 +91,6 @@
   "results": {
     "title": "結果",
     "processed": "処理済み",
-    "of": "/",
     "files": "ファイル",
     "overall": "全体",
     "average": "平均",

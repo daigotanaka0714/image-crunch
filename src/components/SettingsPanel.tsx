@@ -5,6 +5,7 @@ import { useMissingGlyphs, useSystemFonts } from "../hooks/useFonts";
 import { useAppStore } from "../store/useAppStore";
 import {
   fromSaved,
+  isWatermarkReady,
   loadSavedWatermark,
   toSaved,
   WATERMARK_LIMITS,
@@ -32,6 +33,9 @@ const OUTPUT_FORMATS: OutputFormat[] = [
 
 const WATERMARK_KINDS: WatermarkKind[] = ["text", "image"];
 
+const SETTINGS_TABS = ["basic", "watermark"] as const;
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+
 // The border keeps a white swatch visible on the white panel
 const COLOR_INPUT_CLASS =
   "h-8 w-12 p-0.5 rounded-lg border border-slate-300 bg-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
@@ -54,6 +58,7 @@ export function SettingsPanel() {
   const [resizeEnabled, setResizeEnabled] = useState(
     options.width !== null || options.height !== null,
   );
+  const [activeTab, setActiveTab] = useState<SettingsTab>("basic");
 
   const isProcessing = processingState === "processing";
 
@@ -80,6 +85,7 @@ export function SettingsPanel() {
   };
 
   const { watermark } = options;
+  const watermarkReady = isWatermarkReady(watermark);
   const textWatermark = watermark?.kind === "text" ? watermark : null;
   const systemFonts = useSystemFonts();
   const missingGlyphs = useMissingGlyphs(
@@ -177,206 +183,280 @@ export function SettingsPanel() {
             {t("settings.title")}
           </h3>
         </div>
+        <div
+          role="tablist"
+          aria-label={t("settings.title")}
+          className="flex gap-1 mt-3 p-1 bg-slate-100 rounded-xl"
+        >
+          {SETTINGS_TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              id={`settings-tab-${tab}`}
+              aria-selected={activeTab === tab}
+              aria-controls={`settings-panel-${tab}`}
+              onClick={() => setActiveTab(tab)}
+              className={`
+                flex-1 flex items-center justify-center gap-1.5
+                px-3 py-1.5 rounded-lg text-sm font-medium
+                transition-colors duration-200
+                ${activeTab === tab ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}
+              `}
+            >
+              {t(
+                tab === "basic" ? "settings.tabBasic" : "settings.tabWatermark",
+              )}
+              {tab === "watermark" && watermark && (
+                <>
+                  {/* Keeps the badge a separate word in the tab's name */}{" "}
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-xs whitespace-nowrap ${watermarkReady ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"}`}
+                  >
+                    {t(
+                      watermarkReady
+                        ? "settings.tabWatermarkOn"
+                        : "settings.tabWatermarkIncomplete",
+                    )}
+                  </span>
+                </>
+              )}
+            </button>
+          ))}
+        </div>
+        {systemFonts.replacement && (
+          <div
+            role="status"
+            className="mt-3 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2 rounded-xl text-xs"
+          >
+            <span className="flex-1">
+              {t("settings.watermarkFontReplaced", {
+                ...systemFonts.replacement,
+              })}
+            </span>
+            <button
+              type="button"
+              onClick={systemFonts.dismissReplacement}
+              aria-label={t("settings.dismiss")}
+              className="p-0.5 hover:bg-amber-100 rounded"
+            >
+              <XIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="p-4 space-y-5">
-        {/* Output Format */}
-        <div className="space-y-2">
-          <label
-            className="text-sm font-medium text-slate-600"
-            htmlFor="settings-format"
-          >
-            {t("settings.format")}
-          </label>
-          <select
-            id="settings-format"
-            value={options.format}
-            onChange={(e) =>
-              setOptions({ format: e.target.value as OutputFormat })
-            }
-            disabled={isProcessing}
-            className={`
+      {activeTab === "basic" && (
+        <div
+          role="tabpanel"
+          id="settings-panel-basic"
+          aria-labelledby="settings-tab-basic"
+          className="p-4 space-y-5"
+        >
+          {/* Output Format */}
+          <div className="space-y-2">
+            <label
+              className="text-sm font-medium text-slate-600"
+              htmlFor="settings-format"
+            >
+              {t("settings.format")}
+            </label>
+            <select
+              id="settings-format"
+              value={options.format}
+              onChange={(e) =>
+                setOptions({ format: e.target.value as OutputFormat })
+              }
+              disabled={isProcessing}
+              className={`
               w-full custom-select
               bg-slate-50 border border-slate-200 rounded-xl
               px-4 py-2.5 text-sm text-slate-700 font-medium
               transition-all duration-200
               disabled:opacity-50 disabled:cursor-not-allowed
             `}
-          >
-            {OUTPUT_FORMATS.map((format) => (
-              <option key={format} value={format}>
-                {format.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Quality */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <label
-              className="text-sm font-medium text-slate-600"
-              htmlFor="settings-quality"
             >
-              {t("settings.quality")}
-            </label>
-            <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
-              {options.quality}%
-            </span>
+              {OUTPUT_FORMATS.map((format) => (
+                <option key={format} value={format}>
+                  {format.toUpperCase()}
+                </option>
+              ))}
+            </select>
           </div>
-          <input
-            id="settings-quality"
-            type="range"
-            min="1"
-            max="100"
-            value={options.quality}
-            onChange={(e) =>
-              setOptions({ quality: parseInt(e.target.value, 10) })
-            }
-            disabled={isProcessing}
-            className="w-full disabled:opacity-50"
-            style={{ background: sliderBackground }}
-          />
-        </div>
 
-        {/* Resize */}
-        <div className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={resizeEnabled}
-              onChange={(e) => handleResizeToggle(e.target.checked)}
-              disabled={isProcessing}
-              className="custom-checkbox"
-            />
-            <span className="text-sm font-medium text-slate-600">
-              {t("settings.resizeEnable")}
-            </span>
-          </label>
-          {resizeEnabled && (
-            <div className="flex gap-3 animate-fadeIn">
-              <div className="flex-1">
-                <label
-                  className="text-xs font-medium text-slate-500 mb-1 block"
-                  htmlFor="settings-width"
-                >
-                  {t("settings.width")}
-                </label>
-                <input
-                  id="settings-width"
-                  type="number"
-                  placeholder="px"
-                  value={options.width || ""}
-                  onChange={(e) =>
-                    setOptions({
-                      width: e.target.value
-                        ? parseInt(e.target.value, 10)
-                        : null,
-                    })
-                  }
-                  disabled={isProcessing}
-                  className="w-full custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
-                />
-              </div>
-              <div className="flex-1">
-                <label
-                  className="text-xs font-medium text-slate-500 mb-1 block"
-                  htmlFor="settings-height"
-                >
-                  {t("settings.height")}
-                </label>
-                <input
-                  id="settings-height"
-                  type="number"
-                  placeholder="px"
-                  value={options.height || ""}
-                  onChange={(e) =>
-                    setOptions({
-                      height: e.target.value
-                        ? parseInt(e.target.value, 10)
-                        : null,
-                    })
-                  }
-                  disabled={isProcessing}
-                  className="w-full custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
-                />
-              </div>
+          {/* Quality */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <label
+                className="text-sm font-medium text-slate-600"
+                htmlFor="settings-quality"
+              >
+                {t("settings.quality")}
+              </label>
+              <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                {options.quality}%
+              </span>
             </div>
-          )}
+            <input
+              id="settings-quality"
+              type="range"
+              min="1"
+              max="100"
+              value={options.quality}
+              onChange={(e) =>
+                setOptions({ quality: parseInt(e.target.value, 10) })
+              }
+              disabled={isProcessing}
+              className="w-full disabled:opacity-50"
+              style={{ background: sliderBackground }}
+            />
+          </div>
+
+          {/* Resize */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={resizeEnabled}
+                onChange={(e) => handleResizeToggle(e.target.checked)}
+                disabled={isProcessing}
+                className="custom-checkbox"
+              />
+              <span className="text-sm font-medium text-slate-600">
+                {t("settings.resizeEnable")}
+              </span>
+            </label>
+            {resizeEnabled && (
+              <div className="flex gap-3 animate-fadeIn">
+                <div className="flex-1">
+                  <label
+                    className="text-xs font-medium text-slate-500 mb-1 block"
+                    htmlFor="settings-width"
+                  >
+                    {t("settings.width")}
+                  </label>
+                  <input
+                    id="settings-width"
+                    type="number"
+                    placeholder="px"
+                    value={options.width || ""}
+                    onChange={(e) =>
+                      setOptions({
+                        width: e.target.value
+                          ? parseInt(e.target.value, 10)
+                          : null,
+                      })
+                    }
+                    disabled={isProcessing}
+                    className="w-full custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label
+                    className="text-xs font-medium text-slate-500 mb-1 block"
+                    htmlFor="settings-height"
+                  >
+                    {t("settings.height")}
+                  </label>
+                  <input
+                    id="settings-height"
+                    type="number"
+                    placeholder="px"
+                    value={options.height || ""}
+                    onChange={(e) =>
+                      setOptions({
+                        height: e.target.value
+                          ? parseInt(e.target.value, 10)
+                          : null,
+                      })
+                    }
+                    disabled={isProcessing}
+                    className="w-full custom-input bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm disabled:opacity-50"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Metadata */}
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-600">
+              {t("settings.metadata")}
+            </legend>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={options.keep_metadata}
+                  onChange={() => setOptions({ keep_metadata: true })}
+                  disabled={isProcessing}
+                  className="custom-radio"
+                />
+                <span className="text-sm text-slate-700">
+                  {t("settings.keepMetadata")}
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={!options.keep_metadata}
+                  onChange={() => setOptions({ keep_metadata: false })}
+                  disabled={isProcessing}
+                  className="custom-radio"
+                />
+                <span className="text-sm text-slate-700">
+                  {t("settings.removeMetadata")}
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          {/* Compression */}
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-slate-600">
+              {t("settings.compression")}
+            </legend>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={options.compression === "lossy"}
+                  onChange={() =>
+                    setOptions({ compression: "lossy" as CompressionType })
+                  }
+                  disabled={isProcessing}
+                  className="custom-radio"
+                />
+                <span className="text-sm text-slate-700">
+                  {t("settings.lossy")}
+                </span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={options.compression === "lossless"}
+                  onChange={() =>
+                    setOptions({ compression: "lossless" as CompressionType })
+                  }
+                  disabled={isProcessing}
+                  className="custom-radio"
+                />
+                <span className="text-sm text-slate-700">
+                  {t("settings.lossless")}
+                </span>
+              </label>
+            </div>
+          </fieldset>
         </div>
+      )}
 
-        {/* Metadata */}
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-slate-600">
-            {t("settings.metadata")}
-          </legend>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                checked={options.keep_metadata}
-                onChange={() => setOptions({ keep_metadata: true })}
-                disabled={isProcessing}
-                className="custom-radio"
-              />
-              <span className="text-sm text-slate-700">
-                {t("settings.keepMetadata")}
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                checked={!options.keep_metadata}
-                onChange={() => setOptions({ keep_metadata: false })}
-                disabled={isProcessing}
-                className="custom-radio"
-              />
-              <span className="text-sm text-slate-700">
-                {t("settings.removeMetadata")}
-              </span>
-            </label>
-          </div>
-        </fieldset>
-
-        {/* Compression */}
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-slate-600">
-            {t("settings.compression")}
-          </legend>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                checked={options.compression === "lossy"}
-                onChange={() =>
-                  setOptions({ compression: "lossy" as CompressionType })
-                }
-                disabled={isProcessing}
-                className="custom-radio"
-              />
-              <span className="text-sm text-slate-700">
-                {t("settings.lossy")}
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                checked={options.compression === "lossless"}
-                onChange={() =>
-                  setOptions({ compression: "lossless" as CompressionType })
-                }
-                disabled={isProcessing}
-                className="custom-radio"
-              />
-              <span className="text-sm text-slate-700">
-                {t("settings.lossless")}
-              </span>
-            </label>
-          </div>
-        </fieldset>
-
-        {/* Watermark */}
-        <div className="space-y-3">
+      {activeTab === "watermark" && (
+        <div
+          role="tabpanel"
+          id="settings-panel-watermark"
+          aria-labelledby="settings-tab-watermark"
+          className="p-4 space-y-3"
+        >
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -389,26 +469,6 @@ export function SettingsPanel() {
               {t("settings.watermarkEnable")}
             </span>
           </label>
-          {systemFonts.replacement && (
-            <div
-              role="status"
-              className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2 rounded-xl text-xs"
-            >
-              <span className="flex-1">
-                {t("settings.watermarkFontReplaced", {
-                  ...systemFonts.replacement,
-                })}
-              </span>
-              <button
-                type="button"
-                onClick={systemFonts.dismissReplacement}
-                aria-label={t("settings.dismiss")}
-                className="p-0.5 hover:bg-amber-100 rounded"
-              >
-                <XIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
           {watermark && (
             <div className="space-y-4 animate-fadeIn">
               <WatermarkPreview />
@@ -885,41 +945,41 @@ export function SettingsPanel() {
             </div>
           )}
         </div>
+      )}
 
-        {/* Output Directory */}
-        <div className="space-y-2">
-          <label
-            className="text-sm font-medium text-slate-600"
-            htmlFor="settings-output-dir"
-          >
-            {t("settings.outputDir")}
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="settings-output-dir"
-              type="text"
-              value={outputDir}
-              disabled={isProcessing}
-              className="flex-1 custom-input bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-600 disabled:opacity-50"
-              readOnly
-              placeholder={t("settings.selectDir")}
-            />
-            <button
-              type="button"
-              onClick={handleSelectOutputDir}
-              disabled={isProcessing}
-              className={`
+      {/* Output Directory: needed to start, so outside the tabs */}
+      <div className="p-4 space-y-2">
+        <label
+          className="text-sm font-medium text-slate-600"
+          htmlFor="settings-output-dir"
+        >
+          {t("settings.outputDir")}
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="settings-output-dir"
+            type="text"
+            value={outputDir}
+            disabled={isProcessing}
+            className="flex-1 custom-input bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-600 disabled:opacity-50"
+            readOnly
+            placeholder={t("settings.selectDir")}
+          />
+          <button
+            type="button"
+            onClick={handleSelectOutputDir}
+            disabled={isProcessing}
+            className={`
                 flex items-center gap-2 px-4 py-2.5
                 bg-slate-100 hover:bg-slate-200 border border-slate-200
                 rounded-xl text-sm font-medium text-slate-700
                 transition-all duration-200
                 ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}
               `}
-            >
-              <FolderIcon className="w-4 h-4" />
-              {t("settings.selectDir")}
-            </button>
-          </div>
+          >
+            <FolderIcon className="w-4 h-4" />
+            {t("settings.selectDir")}
+          </button>
         </div>
       </div>
     </div>

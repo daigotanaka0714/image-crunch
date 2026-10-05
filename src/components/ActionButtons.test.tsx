@@ -411,11 +411,12 @@ describe("ActionButtons", () => {
       ]);
     });
 
-    it("進捗・個別結果・完了の 3 つのイベントを購読する", async () => {
+    it("開始・進捗・個別結果・完了の 4 つのイベントを購読する", async () => {
       setReady();
       await start();
 
       expect([...handlers.keys()]).toEqual([
+        "processing-started",
         "processing-progress",
         "processing-result",
         "processing-complete",
@@ -426,7 +427,7 @@ describe("ActionButtons", () => {
       setReady();
       await start();
 
-      expect(listen).toHaveBeenCalledTimes(3);
+      expect(listen).toHaveBeenCalledTimes(4);
       const listenOrder = vi.mocked(listen).mock.invocationCallOrder;
       const invokeOrder = vi.mocked(invoke).mock.invocationCallOrder[0];
       for (const order of listenOrder) {
@@ -435,32 +436,87 @@ describe("ActionButtons", () => {
     });
   });
 
-  describe("進捗イベント", () => {
-    it("進捗を store に反映し、処理中のファイルに印を付ける", async () => {
+  describe("開始イベント", () => {
+    it("処理を始めたファイルに印を付ける", async () => {
       setReady([makeFile("/photos/a.png"), makeFile("/photos/b.jpg")]);
       await start();
 
-      const progress = makeProgress({ current_file: "/photos/b.jpg" });
-      await emit("processing-progress", progress);
+      await emit("processing-started", "/photos/b.jpg");
 
-      const state = useAppStore.getState();
-      expect(state.progress).toEqual(progress);
-      expect(state.files.map((f) => f.status)).toEqual([
+      expect(useAppStore.getState().files.map((f) => f.status)).toEqual([
         "pending",
         "processing",
       ]);
+    });
+
+    it("並列で処理中のファイルにはすべて印が付く", async () => {
+      setReady([makeFile("/photos/a.png"), makeFile("/photos/b.jpg")]);
+      await start();
+
+      await emit("processing-started", "/photos/a.png");
+      await emit("processing-started", "/photos/b.jpg");
+
+      expect(useAppStore.getState().files.map((f) => f.status)).toEqual([
+        "processing",
+        "processing",
+      ]);
+    });
+
+    it("結果のあとに遅れて届いても、結果を上書きしない", async () => {
+      setReady([makeFile("/photos/a.png")]);
+      await start();
+
+      await emit("processing-result", makeResult());
+      await emit("processing-started", "/photos/a.png");
+
+      expect(useAppStore.getState().files[0].status).toBe("completed");
     });
 
     it("知らないパスが来ても他のファイルの状態は変わらない", async () => {
       setReady([makeFile("/photos/a.png")]);
       await start();
 
-      await emit(
-        "processing-progress",
-        makeProgress({ current_file: "/photos/unknown.png" }),
-      );
+      await emit("processing-started", "/photos/unknown.png");
 
       expect(useAppStore.getState().files[0].status).toBe("pending");
+    });
+
+    it("キャンセル後に届いてもファイルの状態は動かない", async () => {
+      setReady([makeFile("/photos/a.png")]);
+      const user = await start();
+
+      await cancel(user);
+      await emit("processing-started", "/photos/a.png");
+
+      expect(useAppStore.getState().files[0].status).toBe("pending");
+    });
+  });
+
+  describe("進捗イベント", () => {
+    it("進捗を store に反映する", async () => {
+      setReady([makeFile("/photos/a.png")]);
+      await start();
+
+      const progress = makeProgress();
+      await emit("processing-progress", progress);
+
+      expect(useAppStore.getState().progress).toEqual(progress);
+    });
+
+    // 進捗は処理し終えたファイルについて送られるので、処理中の印には使わない
+    it("ファイルの状態は変えない", async () => {
+      setReady([makeFile("/photos/a.png"), makeFile("/photos/b.jpg")]);
+      await start();
+
+      await emit(
+        "processing-progress",
+        makeProgress({ current_file: "/photos/b.jpg" }),
+      );
+
+      expect(useAppStore.getState().files.map((f) => f.status)).toEqual([
+        "pending",
+        "pending",
+      ]);
     });
   });
 
@@ -808,12 +864,12 @@ describe("ActionButtons", () => {
       await act(async () => {
         finishInvoke();
       });
-      expect(listen).toHaveBeenCalledTimes(3);
+      expect(listen).toHaveBeenCalledTimes(4);
 
       await user.click(startButton());
       await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
 
-      expect(listen).toHaveBeenCalledTimes(6);
+      expect(listen).toHaveBeenCalledTimes(8);
     });
   });
 

@@ -79,7 +79,148 @@ function renderPanel(options: Partial<ProcessingOptions> = {}) {
 
 const currentOptions = () => useAppStore.getState().options;
 
+const openTab = (name: RegExp) =>
+  fireEvent.click(screen.getByRole("tab", { name }));
+
 describe("SettingsPanel", () => {
+  describe("タブ", () => {
+    it("基本設定のタブで始まり、ウォーターマークの欄は出ない", () => {
+      renderPanel();
+
+      expect(screen.getByRole("tab", { name: "Basic" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(
+        screen.getByRole("tabpanel", { name: "Basic" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("checkbox", { name: "Add watermark" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("ウォーターマークのタブに切り替えると、基本設定の欄は消える", () => {
+      renderPanel();
+
+      openTab(/Watermark/);
+
+      expect(screen.getByRole("tab", { name: /Watermark/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(
+        screen.getByRole("checkbox", { name: "Add watermark" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("combobox", { name: "Output Format" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("出力先はどちらのタブでも出る", () => {
+      renderPanel();
+      expect(
+        screen.getByRole("textbox", { name: "Output Directory" }),
+      ).toBeInTheDocument();
+
+      openTab(/Watermark/);
+      expect(
+        screen.getByRole("textbox", { name: "Output Directory" }),
+      ).toBeInTheDocument();
+    });
+
+    it("タブを行き来しても、リサイズの有効・無効は保たれる", async () => {
+      const user = userEvent.setup();
+      renderPanel();
+
+      await user.click(screen.getByRole("checkbox", { name: "Enable resize" }));
+      openTab(/Watermark/);
+      openTab(/Basic/);
+
+      expect(
+        screen.getByRole("checkbox", { name: "Enable resize" }),
+      ).toBeChecked();
+    });
+
+    it("ウォーターマークがオフならタブに印を出さない", () => {
+      renderPanel({ watermark: null });
+
+      expect(
+        screen.getByRole("tab", { name: "Watermark" }),
+      ).toBeInTheDocument();
+    });
+
+    it("オンで必要な指定がそろっていれば「On」を出す", () => {
+      renderPanel({
+        watermark: {
+          kind: "image",
+          path: "/logo.png",
+          position: "center",
+          margin_percent: 2,
+          opacity: 50,
+          scale_percent: 20,
+          tile: null,
+        },
+      });
+
+      expect(
+        screen.getByRole("tab", { name: "Watermark On" }),
+      ).toBeInTheDocument();
+    });
+
+    // 基本設定のタブにいても、開始ボタンが押せない理由が分かるように
+    it("オンで指定が足りなければ「Needs input」を出す", () => {
+      renderPanel({
+        watermark: {
+          kind: "text",
+          text: " ",
+          font: "Helvetica",
+          color: "#ffffff",
+          outline: null,
+          position: "center",
+          margin_percent: 2,
+          opacity: 50,
+          scale_percent: 20,
+          tile: null,
+        },
+      });
+
+      expect(
+        screen.getByRole("tab", { name: "Watermark Needs input" }),
+      ).toBeInTheDocument();
+    });
+
+    it("日本語でもタブの名前が出る", async () => {
+      await i18n.changeLanguage("ja");
+      renderPanel({
+        watermark: {
+          kind: "image",
+          path: "",
+          position: "center",
+          margin_percent: 2,
+          opacity: 50,
+          scale_percent: 20,
+          tile: null,
+        },
+      });
+
+      expect(screen.getByRole("tab", { name: "基本" })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: "ウォーターマーク 未入力あり" }),
+      ).toBeInTheDocument();
+    });
+
+    it("処理中でもタブは切り替えられる", () => {
+      useAppStore.setState({ processingState: "processing" });
+      renderPanel();
+
+      openTab(/Watermark/);
+
+      expect(
+        screen.getByRole("checkbox", { name: "Add watermark" }),
+      ).toBeDisabled();
+    });
+  });
+
   describe("出力形式", () => {
     it("対応する 6 形式が定義順に並ぶ", () => {
       renderPanel();
@@ -371,11 +512,12 @@ describe("SettingsPanel", () => {
       ...patch,
     });
 
-    // list_fonts の結果が反映されるまで待つ
+    // ウォーターマークのタブを開き、list_fonts の結果が反映されるまで待つ
     const renderWithFonts = async (
       options: Partial<ProcessingOptions> = {},
     ) => {
       const view = renderPanel(options);
+      openTab(/Watermark|ウォーターマーク/);
       await act(async () => {});
       return view;
     };

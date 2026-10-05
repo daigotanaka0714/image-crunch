@@ -112,6 +112,28 @@ describe("useAppStore", () => {
     });
   });
 
+  describe("markFileProcessing", () => {
+    it("pending のファイルだけが processing になる", () => {
+      useAppStore
+        .getState()
+        .addFiles([
+          makeFile("/a.png"),
+          makeFile("/b.png", { status: "completed" }),
+          makeFile("/c.png", { status: "error" }),
+        ]);
+
+      for (const path of ["/a.png", "/b.png", "/c.png"]) {
+        useAppStore.getState().markFileProcessing(path);
+      }
+
+      expect(useAppStore.getState().files.map((f) => f.status)).toEqual([
+        "processing",
+        "completed",
+        "error",
+      ]);
+    });
+  });
+
   describe("resetFileStatuses", () => {
     it("status と結果だけが初期化され、ファイル自体は残る", () => {
       useAppStore.getState().addFiles([makeFile("/a.png")]);

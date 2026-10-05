@@ -203,3 +203,12 @@ export function initialWatermark(): Watermark | null {
   const saved = loadSavedWatermark();
   return saved.enabled ? fromSaved(saved) : null;
 }
+
+// An enabled watermark without its image, text or font would fail every file
+// or draw nothing
+export function isWatermarkReady(watermark: Watermark | null): boolean {
+  if (watermark === null) return true;
+  return watermark.kind === "image"
+    ? !!watermark.path
+    : !!watermark.text.trim() && !!watermark.font;
+}
