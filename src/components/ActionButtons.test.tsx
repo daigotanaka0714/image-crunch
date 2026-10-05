@@ -954,6 +954,24 @@ describe("ActionButtons", () => {
       expect(state.error).toBeNull();
     });
 
+    it("処理中だったファイルは pending に戻り、終わったファイルの結果は残る", async () => {
+      setReady([makeFile("/photos/a.png"), makeFile("/photos/b.jpg")]);
+      const user = await start();
+
+      await emit("processing-started", "/photos/a.png");
+      await emit("processing-started", "/photos/b.jpg");
+      await emit(
+        "processing-result",
+        makeResult({ original_path: "/photos/a.png" }),
+      );
+      await cancel(user);
+
+      expect(useAppStore.getState().files.map((f) => f.status)).toEqual([
+        "completed",
+        "pending",
+      ]);
+    });
+
     it("キャンセル後に進捗イベントが来てもファイルの状態は動かない", async () => {
       setReady([makeFile("/photos/a.png")]);
       const user = await start();

@@ -26,6 +26,7 @@ export function ActionButtons() {
     setError,
     updateFileStatus,
     markFileProcessing,
+    clearProcessingStatuses,
     resetFileStatuses,
   } = useAppStore();
 
@@ -210,6 +211,8 @@ export function ActionButtons() {
     unsubscribeRef.current = null;
     setProcessingState("idle");
     setProgress(null);
+    // Their results will no longer arrive
+    clearProcessingStatuses();
   };
 
   return (

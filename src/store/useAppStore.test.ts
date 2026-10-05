@@ -134,6 +134,26 @@ describe("useAppStore", () => {
     });
   });
 
+  describe("clearProcessingStatuses", () => {
+    it("processing のファイルだけが pending に戻り、結果は残る", () => {
+      useAppStore
+        .getState()
+        .addFiles([
+          makeFile("/a.png", { status: "processing" }),
+          makeFile("/b.png", { status: "completed", reductionPercent: 60 }),
+          makeFile("/c.png", { status: "error", error: "失敗" }),
+        ]);
+
+      useAppStore.getState().clearProcessingStatuses();
+
+      expect(useAppStore.getState().files).toMatchObject([
+        { status: "pending" },
+        { status: "completed", reductionPercent: 60 },
+        { status: "error", error: "失敗" },
+      ]);
+    });
+  });
+
   describe("resetFileStatuses", () => {
     it("status と結果だけが初期化され、ファイル自体は残る", () => {
       useAppStore.getState().addFiles([makeFile("/a.png")]);
