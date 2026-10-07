@@ -27,11 +27,12 @@ pub struct BatchStats {
     pub median_reduction_percent: f64,
 }
 
-/// Progress update event
+/// Progress update event, sent each time a file finishes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgressUpdate {
     pub current: usize,
     pub total: usize,
+    /// The file that has just finished
     pub current_file: String,
     pub percent: f64,
 }
@@ -246,6 +247,8 @@ fn process_batch_with<E: EventEmitter + Sync>(
             .map(|(index, input_path)| {
                 let input = Path::new(input_path);
                 let output_path = output_dir_path.join(&output_names[index]);
+
+                emit_or_log(emitter, "processing-started", input_path, log);
 
                 // Process the image
                 let result = match ImageProcessor::process_image(input, &output_path, &options) {
@@ -531,6 +534,7 @@ mod tests {
         // ...but each failure has to be traceable to the event it belongs to.
         let logged = logged.into_inner().unwrap();
         for event in [
+            "processing-started",
             "processing-progress",
             "processing-result",
             "processing-complete",
@@ -543,6 +547,56 @@ mod tests {
             );
         }
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn each_file_is_announced_before_its_result() {
+        let dir = scratch_dir("batch-started-order");
+        let inputs = vec![
+            write_png(&dir, "a.png"),
+            write_png(&dir, "b.png"),
+            write_png(&dir, "c.png"),
+        ];
+        let events = Mutex::new(Vec::new());
+
+        struct RecordingEmitter<'a>(&'a Mutex<Vec<(String, String)>>);
+        impl EventEmitter for RecordingEmitter<'_> {
+            fn emit_event<S: Serialize + Clone>(
+                &self,
+                event: &str,
+                payload: S,
+            ) -> Result<(), String> {
+                let value = serde_json::to_value(payload).unwrap();
+                let path = match event {
+                    "processing-started" => value.as_str().unwrap().to_string(),
+                    "processing-result" => value["original_path"].as_str().unwrap().to_string(),
+                    _ => return Ok(()),
+                };
+                self.0.lock().unwrap().push((event.to_string(), path));
+                Ok(())
+            }
+        }
+
+        process_batch_with(
+            &RecordingEmitter(&events),
+            inputs.clone(),
+            dir.join("output").to_string_lossy().to_string(),
+            ProcessingOptions::default(),
+            &|_| {},
+        )
+        .unwrap();
+
+        let events = events.into_inner().unwrap();
+        for input in &inputs {
+            let position = |event: &str| {
+                events
+                    .iter()
+                    .position(|(e, path)| e == event && path == input)
+                    .unwrap_or_else(|| panic!("no \"{}\" for {}: {:?}", event, input, events))
+            };
+            assert!(position("processing-started") < position("processing-result"));
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

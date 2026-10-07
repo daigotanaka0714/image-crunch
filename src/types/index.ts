@@ -106,10 +106,11 @@ export interface BatchStats {
   median_reduction_percent: number;
 }
 
-// Progress update
+// Progress update, sent each time a file finishes
 export interface ProgressUpdate {
   current: number;
   total: number;
+  // The file that has just finished
   current_file: string;
   percent: number;
 }

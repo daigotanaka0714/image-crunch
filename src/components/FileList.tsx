@@ -40,8 +40,6 @@ export function FileList() {
   }
 
   const isProcessing = processingState === "processing";
-  const completedCount = files.filter((f) => f.status === "completed").length;
-  const errorCount = files.filter((f) => f.status === "error").length;
   // The selection only matters to the watermark preview
   const previewPath =
     options.watermark !== null
@@ -57,18 +55,6 @@ export function FileList() {
           <span className="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-full">
             {files.length}
           </span>
-          {completedCount > 0 && (
-            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-full flex items-center gap-1">
-              <CheckCircleIcon className="w-3 h-3" />
-              {completedCount}
-            </span>
-          )}
-          {errorCount > 0 && (
-            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-xs font-semibold rounded-full flex items-center gap-1">
-              <AlertCircleIcon className="w-3 h-3" />
-              {errorCount}
-            </span>
-          )}
         </div>
         <button
           type="button"

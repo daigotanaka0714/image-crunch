@@ -29,6 +29,10 @@ interface AppState {
     status: FileStatus,
     result?: Partial<FileItem>,
   ) => void;
+  // Only a pending file changes, so a late start never hides a result
+  markFileProcessing: (path: string) => void;
+  // Files still processing go back to pending; finished ones keep their result
+  clearProcessingStatuses: () => void;
   resetFileStatuses: () => void;
 
   // File chosen in the list for the watermark preview (null = the first)
@@ -105,6 +109,20 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       files: state.files.map((f) =>
         f.path === path ? { ...f, status, ...result } : f,
+      ),
+    })),
+  markFileProcessing: (path) =>
+    set((state) => ({
+      files: state.files.map((f) =>
+        f.path === path && f.status === "pending"
+          ? { ...f, status: "processing" as const }
+          : f,
+      ),
+    })),
+  clearProcessingStatuses: () =>
+    set((state) => ({
+      files: state.files.map((f) =>
+        f.status === "processing" ? { ...f, status: "pending" as const } : f,
       ),
     })),
   resetFileStatuses: () =>

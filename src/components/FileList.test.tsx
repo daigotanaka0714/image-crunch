@@ -236,7 +236,8 @@ describe("FileList", () => {
       expect(screen.getByText("変換に失敗しました")).toBeInTheDocument();
     });
 
-    it("完了数と失敗数がヘッダーに集計される", () => {
+    // 全体の件数は開始ボタンと結果の欄に出すので、ここでは集計しない
+    it("ヘッダーにはファイル数だけを出し、完了数・失敗数は出さない", () => {
       setFiles([
         makeFile("/a.png", { status: "completed" }),
         makeFile("/b.png", { status: "completed" }),
@@ -245,19 +246,9 @@ describe("FileList", () => {
       ]);
       render(<FileList />);
 
-      // 全体件数 4 / 完了 2 / 失敗 1
       expect(screen.getByText("4")).toBeInTheDocument();
-      expect(screen.getByText("2")).toBeInTheDocument();
-      expect(screen.getByText("1")).toBeInTheDocument();
-    });
-
-    it("完了も失敗も無いときは集計バッジを出さない", () => {
-      setFiles([makeFile("/a.png"), makeFile("/b.png")]);
-      render(<FileList />);
-
-      // ファイル数のバッジだけが残る
-      expect(screen.getByText("2")).toBeInTheDocument();
-      expect(screen.queryByText("0")).not.toBeInTheDocument();
+      expect(screen.queryByText("2")).not.toBeInTheDocument();
+      expect(screen.queryByText("1")).not.toBeInTheDocument();
     });
   });
 });

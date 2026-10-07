@@ -56,7 +56,8 @@ describe("ResultsPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("処理中は進捗を表示し、統計は表示しない", () => {
+  // 処理中の進み具合は開始ボタンに出す
+  it("処理中は何も描画しない", () => {
     useAppStore.getState().setProgress({
       current: 3,
       total: 10,
@@ -66,13 +67,9 @@ describe("ResultsPanel", () => {
     useAppStore.getState().setBatchStats(makeStats());
     useAppStore.getState().setProcessingState("processing");
 
-    render(<ResultsPanel />);
+    const { container } = render(<ResultsPanel />);
 
-    // 進捗率は整数（小数点以下なし）で表示される
-    expect(screen.getByText("30%")).toBeInTheDocument();
-    expect(screen.getByText("photo.png")).toBeInTheDocument();
-    // 統計側は出さない
-    expect(screen.queryByText("Processed")).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
   });
 
   describe("件数の表示", () => {

@@ -19,6 +19,10 @@
   },
   "settings": {
     "title": "Settings",
+    "tabBasic": "Basic",
+    "tabWatermark": "Watermark",
+    "tabWatermarkOn": "On",
+    "tabWatermarkIncomplete": "Needs input",
     "format": "Output Format",
     "quality": "Quality",
     "resize": "Resize",
@@ -87,7 +91,6 @@
   "results": {
     "title": "Results",
     "processed": "Processed",
-    "of": "of",
     "files": "files",
     "overall": "Overall",
     "average": "Average",
