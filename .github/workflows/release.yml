@@ -25,6 +25,9 @@ jobs:
             target: ''
 
     runs-on: ${{ matrix.platform }}
+    # 公証の結果待ちで止まったまま走り続けるのを防ぐ。
+    # Mac ランナーは Linux の10倍で課金される。
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -59,14 +62,39 @@ jobs:
           pnpm install
           echo "::endgroup::"
 
+      # secrets コンテキストはステップの if: からは参照できない。
+      # 後続ステップが分岐できるよう、ここで env に落としておく。
+      - name: Detect macOS signing mode
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        env:
+          HAS_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        run: |
+          if [ "$HAS_CERT" = "true" ]; then
+            echo "SIGN_MODE=developer-id" >> "$GITHUB_ENV"
+          else
+            echo "SIGN_MODE=adhoc" >> "$GITHUB_ENV"
+            echo "::warning::APPLE_CERTIFICATE is not set. Falling back to ad-hoc signing (not notarized)."
+          fi
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Ad-hoc signing for macOS (allows unsigned apps to run without "damaged" error)
-          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
+          # macOS の署名は二段構え。APPLE_CERTIFICATE があれば Developer ID で
+          # hardened runtime 付きの署名をし、無ければアドホック署名（'-'）に落ちる。
+          # fork からのビルドや証明書の期限切れ・失効でリリース全体が落ちないようにするため。
+          # アドホックでも「右クリック → 開く」で起動はできる（警告は出る）。
+          APPLE_CERTIFICATE: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && (secrets.APPLE_SIGNING_IDENTITY || '-') || '' }}
+          # 公証の資格情報（APPLE_ID など）はここでは渡さない。渡すと tauri-action が
+          # 中で notarytool を呼び、結果待ちが止まったときに打ち切れない。
+          # 公証は次のステップで、待ち時間と再試行を自分で持って行う。
         with:
-          tagName: ${{ github.ref_name }}
+          # タグ push のときだけリリースを作る。手動実行は公証の検証用で、
+          # tagName が空なら tauri-action はビルドだけしてリリースに触らない。
+          tagName: ${{ github.event_name == 'push' && github.ref_name || '' }}
           releaseName: 'Image Crunch ${{ github.ref_name }}'
           releaseBody: |
             ## Downloads
@@ -76,3 +104,108 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # .dmg を1回だけ提出し、同じ提出の結果を 15分ずつ最大3回待つ。
+      # 提出し直さないのは、Apple 側で処理中のときは列に並び直すだけだから。
+      # 45分で終わらなければジョブは落とすが、提出は Apple 側に残るので、
+      # ログの受付番号で notarytool info <id> を引けば結果を確かめられる。
+      # 同じ提出に中の .app も含まれるので、.app にもチケットを貼れる。
+      - name: Notarize
+        if: matrix.platform == 'macos-latest' && env.SIGN_MODE == 'developer-id'
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          dmg=$(find src-tauri/target -type f -name '*.dmg' -print -quit)
+          app=$(find src-tauri/target -type d -name '*.app' -print -quit)
+          if [ -z "$dmg" ] || [ -z "$app" ]; then
+            echo "::error::.dmg か .app が見つかりません"
+            exit 1
+          fi
+
+          auth=(--apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID")
+          field() { python3 -c "import sys,json;print(json.load(sys.stdin).get('$1',''))"; }
+
+          echo "提出: $dmg"
+          id=$(xcrun notarytool submit "$dmg" "${auth[@]}" --output-format json | field id)
+          if [ -z "$id" ]; then
+            echo "::error::提出できませんでした（受付番号が返ってこない）"
+            exit 1
+          fi
+          echo "::notice::公証の受付番号: $id"
+
+          status=""
+          for attempt in 1 2 3; do
+            echo "--- 結果待ち $attempt 回目（最大15分）---"
+            # wait は時間切れで非ゼロを返す。そのときは同じ提出を待ち直す。
+            xcrun notarytool wait "$id" "${auth[@]}" --timeout 15m || true
+            status=$(xcrun notarytool info "$id" "${auth[@]}" --output-format json | field status)
+            echo "status=$status"
+            case "$status" in
+              Accepted) break ;;
+              Invalid|Rejected)
+                # 待っても直らないので、理由を出して即やめる。
+                echo "::error::公証が拒否されました（status=$status）"
+                xcrun notarytool log "$id" "${auth[@]}" || true
+                exit 1
+                ;;
+            esac
+          done
+
+          if [ "$status" != "Accepted" ]; then
+            echo "::error::45分待っても公証が終わりませんでした（status=$status, id=$id）。提出は Apple 側に残っています"
+            exit 1
+          fi
+
+          xcrun stapler staple "$dmg"
+          xcrun stapler staple "$app"
+
+      # 公証が本当に通ったかを確かめる。署名が成功しても公証されていない差は、
+      # そのアプリを一度も見たことのない Mac でしか現れないので、CI で確定させる。
+      - name: Verify notarization
+        if: matrix.platform == 'macos-latest' && env.SIGN_MODE == 'developer-id'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          app=$(find src-tauri/target -type d -name '*.app' -print -quit)
+          if [ -z "$app" ]; then
+            echo "::error::No .app bundle found under src-tauri/target"
+            exit 1
+          fi
+          echo "Found: $app"
+
+          echo "--- codesign ---"
+          codesign -dv --verbose=4 "$app" 2>&1
+
+          # hardened runtime が付いていないと公証は通らない。
+          codesign -dv "$app" 2>&1 | grep -q 'flags=.*runtime' \
+            || { echo "::error::Hardened runtime is not enabled"; exit 1; }
+
+          echo "--- stapler ---"
+          xcrun stapler validate "$app"
+
+          # 公証済みなら source=Notarized Developer ID になる。
+          echo "--- spctl ---"
+          spctl -a -vvv -t install "$app"
+
+          dmg=$(find src-tauri/target -type f -name '*.dmg' -print -quit)
+          if [ -n "$dmg" ]; then
+            echo "--- stapler (dmg) ---"
+            xcrun stapler validate "$dmg"
+          fi
+
+      # 手動実行ではリリースが無いので、.dmg を成果物として残す。
+      # 一度も Image Crunch を開いたことのない Mac で開けるかを人が確かめるため。
+      - name: Upload dmg
+        if: github.event_name == 'workflow_dispatch' && matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-crunch-${{ matrix.target }}-dmg
+          path: src-tauri/target/**/*.dmg
+          if-no-files-found: error
+          retention-days: 7
