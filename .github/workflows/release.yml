@@ -5,9 +5,74 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'tauri.conf.json の version で下書きのリリースを作る（false ならビルドだけ）'
+        type: boolean
+        default: false
 
 jobs:
+  # リリースのタグを決める。空ならビルドだけで、リリースには触らない。
+  #   タグの push              → push されたタグ
+  #   手動実行（release=false）→ 空
+  #   手動実行（release=true） → v<tauri.conf.json の version>
+  # release=true のときは、同じタグか同じタグのリリース（下書きを含む）が
+  # 既にあればここで落とし、ビルドを始めない。
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      # 下書きのリリースは push 権限が無いと一覧に出ない。
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+
+      - name: Decide tag
+        id: tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          RELEASE: ${{ inputs.release }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" = "push" ]; then
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$RELEASE" != "true" ]; then
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          version=$(jq -r '.version // empty' src-tauri/tauri.conf.json)
+          if [ -z "$version" ]; then
+            echo "::error::src-tauri/tauri.conf.json に version がありません"
+            exit 1
+          fi
+          tag="v$version"
+
+          if [ -n "$(git ls-remote --tags origin "refs/tags/$tag")" ]; then
+            echo "::error::タグ $tag は既にあります。version を上げてから実行してください"
+            exit 1
+          fi
+
+          found=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq ".[] | select(.tag_name == \"$tag\") | .html_url")
+          if [ -n "$found" ]; then
+            echo "::error::タグ $tag のリリース（下書きを含む）が既にあります: $found"
+            exit 1
+          fi
+
+          echo "::notice::下書きのリリースを作ります: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: prepare
     permissions:
       contents: write
     strategy:
@@ -17,12 +82,15 @@ jobs:
           - platform: macos-latest
             args: --target aarch64-apple-darwin
             target: aarch64-apple-darwin
+            fixed_name: ImageCrunch_macos_aarch64.dmg
           - platform: macos-latest
             args: --target x86_64-apple-darwin
             target: x86_64-apple-darwin
+            fixed_name: ImageCrunch_macos_x64.dmg
           - platform: windows-latest
             args: ''
             target: ''
+            fixed_name: ImageCrunch_windows_x64-setup.exe
 
     runs-on: ${{ matrix.platform }}
     # 公証の結果待ちで止まったまま走り続けるのを防ぐ。
@@ -92,10 +160,9 @@ jobs:
           # 中で notarytool を呼び、結果待ちが止まったときに打ち切れない。
           # 公証は次のステップで、待ち時間と再試行を自分で持って行う。
         with:
-          # タグ push のときだけリリースを作る。手動実行は公証の検証用で、
           # tagName が空なら tauri-action はビルドだけしてリリースに触らない。
-          tagName: ${{ github.event_name == 'push' && github.ref_name || '' }}
-          releaseName: 'Image Crunch ${{ github.ref_name }}'
+          tagName: ${{ needs.prepare.outputs.tag }}
+          releaseName: 'Image Crunch ${{ needs.prepare.outputs.tag }}'
           releaseBody: |
             ## Downloads
             - **macOS (Apple Silicon)**: `Image.Crunch_*_aarch64.dmg`
@@ -209,3 +276,33 @@ jobs:
           path: src-tauri/target/**/*.dmg
           if-no-files-found: error
           retention-days: 7
+
+      # 版に依存しない名前でもう1つ添付する。公開後は
+      # https://github.com/<owner>/<repo>/releases/latest/download/<fixed_name>
+      # が常に最新を指す（latest は下書きとプレリリースを含まない）。
+      # macOS は公証とステープルの後に添付するので、こちらの .dmg はステープル済み。
+      - name: Upload installer with a fixed name
+        if: needs.prepare.outputs.tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          FIXED_NAME: ${{ matrix.fixed_name }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ matrix.platform }}" = "windows-latest" ]; then
+            src=$(find src-tauri/target -type f -path '*/bundle/nsis/*-setup.exe' -print -quit)
+          else
+            src=$(find src-tauri/target -type f -name '*.dmg' -print -quit)
+          fi
+          if [ -z "$src" ]; then
+            echo "::error::添付するインストーラーが見つかりません"
+            exit 1
+          fi
+
+          dest="$RUNNER_TEMP/$FIXED_NAME"
+          cp "$src" "$dest"
+          echo "添付: $src → $FIXED_NAME"
+          # 再実行で同じ名前が残っていても上書きする。
+          gh release upload "$TAG" "$dest" --clobber -R "$GITHUB_REPOSITORY"
